@@ -267,7 +267,7 @@ export default function App() {
             </div>
             <button className="btn btn-o btn-sm" onClick={() => setShowApiModal(true)} title="Configurar API Key">⚙ API Key</button>
             <select className="msel" value={selMonth} onChange={e => setSelMonth(e.target.value)}>
-              {Array.from({ length: 14 }, (_, i) => {
+              {Array.from({ length: 28 }, (_, i) => {
                 const d = new Date(); d.setMonth(d.getMonth() - i);
                 const v = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
                 return <option key={v} value={v}>{MONTHS_FULL[d.getMonth()]} {d.getFullYear()}</option>;
