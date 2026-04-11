@@ -928,63 +928,86 @@ function Import({onImport,showToast,batches,onDeleteBatch}){
   const processFile=async(file)=>{
     setProcessing(true);setPreview([]);
     try{
-      const ext=file.name.split(".").pop().toLowerCase();let raw=[];
-      if(ext==="csv"){raw=parseCSV(await file.text());}
-      else if(ext==="pdf"){
+      const ext=file.name.split(".").pop().toLowerCase();
+      let raw=[];
+      if(ext==="csv"){
+        raw=parseCSV(await file.text());
+      } else if(ext==="pdf"){
         const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
         raw=await extractPDF(b64);
-      }
-      else if(ext==="xlsx"||ext==="xls"){
+      } else if(ext==="xlsx"||ext==="xls"){
         const{read,utils}=await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
         const wb=read(await file.arrayBuffer());
         const ws=wb.Sheets[wb.SheetNames[0]];
-        // Read with raw numbers for BBVA (which uses real numbers, not text)
-        const rowsRaw=utils.sheet_to_json(ws,{header:1,raw:true});
-        const rowsStr=utils.sheet_to_json(ws,{header:1,raw:false});
 
-        // Find header row (contains 'Concepto' or 'Importe')
-        let dataStart=1;
-        let format="santander"; // default
-        for(let i=0;i<Math.min(rowsStr.length,15);i++){
-          const row=rowsStr[i];
-          if(!row) continue;
-          const rowText=row.map(c=>String(c||"").toLowerCase()).join("|");
-          if(rowText.includes("concepto")&&rowText.includes("importe")){
-            dataStart=i+1;
-            // Detect BBVA: has 'fecha valor' and 'movimiento' columns, data in col B onwards
-            if(rowText.includes("fecha valor")&&rowText.includes("movimiento")) format="bbva";
-            break;
+        // Use account name to determine format — no autodetection needed
+        const isBBVA = previewSrc==="BBVA"||previewSrc==="BBVA Tarjeta Prepago";
+        const isBBVATP = previewSrc==="BBVA Tarjeta Prepago";
+
+        if(isBBVA){
+          // BBVA formats: amounts are real JS numbers, read raw:true
+          const rows=utils.sheet_to_json(ws,{header:1,raw:true});
+          // Find header row (row containing string "Concepto")
+          let dataStart=5; // default for BBVA
+          for(let i=0;i<Math.min(rows.length,10);i++){
+            const r=rows[i];
+            if(r&&r.some(c=>typeof c==="string"&&c.toLowerCase().includes("concepto"))){
+              dataStart=i+1; break;
+            }
           }
-        }
-
-        if(format==="bbva"){
-          // BBVA: B=FechaValor, C=Fecha, D=Concepto, E=Movimiento, F=Importe (real number)
-          raw=rowsRaw.slice(dataStart).map(r=>{
-            if(!r||!r[2]) return null;
-            const date=parseExcelDate(r[2]); // Col C = Fecha operación
-            const concepto=String(r[3]||"").trim();
-            const movimiento=String(r[4]||"").trim();
-            const description=movimiento&&movimiento!==concepto?`${concepto} - ${movimiento}`:concepto;
-            const amount=parseFloat(r[5]); // Col F = Importe (already a number)
-            if(isNaN(amount)||!description) return null;
+          raw=rows.slice(dataStart).map(r=>{
+            if(!r) return null;
+            let date,description,amount;
+            if(isBBVATP){
+              // BBVA Tarjeta Prepago: col B=Fecha, C=Concepto, D=Movimiento, E=Importe
+              if(!r[1]) return null;
+              date=parseExcelDate(r[1]);
+              const c1=String(r[2]||"").trim();
+              const c2=String(r[3]||"").trim();
+              description=c2&&c2!==c1&&c2!=="No categorizable"?`${c1} - ${c2}`:c1;
+              amount=parseFloat(r[4]);
+            } else {
+              // BBVA cuenta corriente: col B=FechaValor, C=Fecha, D=Concepto, E=Movimiento, F=Importe
+              if(!r[2]) return null;
+              date=parseExcelDate(r[2]);
+              const c1=String(r[3]||"").trim();
+              const c2=String(r[4]||"").trim();
+              description=c2&&c2!==c1?`${c1} - ${c2}`:c1;
+              amount=parseFloat(r[5]);
+            }
+            if(!description||isNaN(amount)) return null;
             return{date,description,amount};
           }).filter(Boolean);
         } else {
-          // Santander: A=Fecha, B=FechaValor, C=Concepto, D=Importe(text), E=Saldo
-          raw=rowsStr.slice(dataStart).map(r=>{
-            if(!r||r.length<4) return null;
+          // Santander / Efectivo: amounts are Spanish text "1.034,89"
+          const rows=utils.sheet_to_json(ws,{header:1,raw:false});
+          // Find header row containing "Concepto"
+          let dataStart=1;
+          for(let i=0;i<Math.min(rows.length,10);i++){
+            const r=rows[i];
+            if(r&&r.some(c=>String(c||"").toLowerCase().includes("concepto"))){
+              dataStart=i+1; break;
+            }
+          }
+          raw=rows.slice(dataStart).map(r=>{
+            if(!r||r.length<4||!r[0]) return null;
             const date=parseExcelDate(r[0]);
             const description=String(r[2]||"").trim();
             const amount=parseSpanishNumber(r[3]);
-            if(isNaN(amount)||!description||!r[0]) return null;
+            if(isNaN(amount)||!description) return null;
             return{date,description,amount};
           }).filter(Boolean);
         }
+      } else {
+        showToast("Formato no soportado: usa PDF, CSV o Excel","✕");
       }
-      else{showToast("Formato no soportado: usa PDF, CSV o Excel","✕");}
       setPreview(raw);
       if(raw.length>0) showToast(`${raw.length} movimientos listos para importar`,"📋");
-    }catch(e){showToast("Error al leer el archivo: "+e.message,"✕");}
+      else showToast("No se encontraron movimientos en el archivo","✕");
+    }catch(e){
+      showToast("Error al leer el archivo: "+e.message,"✕");
+      console.error("Import error:",e);
+    }
     setProcessing(false);
   };
 
