@@ -32,7 +32,7 @@ const DEFAULT_STRUCTURE = {
         {id:"ef-i17",label:"Otros Gastos Efectivo"},
       ]},
     ]},
-    { id: "san1", fuente: "Santander 1", label: "Gastos Santander 1", grupos: [
+    { id: "san1", fuente: "Santander", label: "Gastos Santander 1", grupos: [
       { id: "san-g1", label: "Alimentación Supermercado", items: [{id:"san-i1",label:"Supermercados"},{id:"san-i2",label:"Pescadería"},{id:"san-i3",label:"Bofrost"}] },
       { id: "san-g2", label: "Seguros", items: [{id:"san-i4",label:"Seguro de Decesos"},{id:"san-i5",label:"Seguro Móviles"}] },
       { id: "san-g3", label: "Vehículos", items: [{id:"san-i6",label:"Combustible"},{id:"san-i7",label:"Revisión / Taller"},{id:"san-i8",label:"ITV"},{id:"san-i9",label:"Peaje Autopista"}] },
@@ -41,8 +41,11 @@ const DEFAULT_STRUCTURE = {
       { id: "san-g6", label: "Hogar y Comunidad", items: [{id:"san-i17",label:"Alarma (Prosegur)"},{id:"san-i18",label:"Gimnasio"},{id:"san-i19",label:"Peluquería y Estética"},{id:"san-i20",label:"Comunidad Santander"}] },
       { id: "san-g7", label: "Otros Santander", items: [{id:"san-i21",label:"Antivirus"},{id:"san-i22",label:"Otros Gastos Santander"}] },
     ]},
-    { id: "san2", fuente: "Santander 2", label: "Gastos Santander 2", grupos: [
+    { id: "san2", fuente: "Santander Ahorro", label: "Gastos Santander 2", grupos: [
       { id: "san2-g1", label: "Gastos Santander 2", items: [{id:"san2-i1",label:"Otros Gastos Santander 2"}] },
+    ]},
+    { id: "bbva-tp", fuente: "BBVA Tarjeta Prepago", label: "Gastos BBVA Tarjeta Prepago", grupos: [
+      { id: "bbva-tp-g1", label: "Gastos Tarjeta Prepago", items: [{id:"bbva-tp-i1",label:"Otros Gastos Tarjeta Prepago"}] },
     ]},
     { id: "bbva", fuente: "BBVA", label: "Gastos BBVA", grupos: [
       { id: "bbva-g1", label: "Vivienda", items: [{id:"bbva-i1",label:"Préstamo de la Casa"},{id:"bbva-i2",label:"Seguro de la Casa"}] },
@@ -59,8 +62,8 @@ const DEFAULT_STRUCTURE = {
   ],
 };
 
-const SOURCES = ["Efectivo", "Santander 1", "Santander 2", "BBVA"];
-const IMPORT_SOURCES = ["Efectivo", "Santander 1", "Santander 2", "BBVA"]; // sources that accept file imports
+const SOURCES = ["Efectivo", "Santander", "Santander Ahorro", "BBVA", "BBVA Tarjeta Prepago"];
+const IMPORT_SOURCES = ["Efectivo", "Santander", "Santander Ahorro", "BBVA", "BBVA Tarjeta Prepago"]; // sources that accept file imports
 const MONTHS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const MONTHS_FULL = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
@@ -226,7 +229,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff);font-size:14px
 .no-cat{background:var(--s2);border:1px dashed var(--border2);color:var(--muted);border-radius:20px;padding:2px 8px;font-size:11px;cursor:pointer;outline:none;font-family:var(--ff)}
 
 .src-chip{display:inline-block;font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;white-space:nowrap}
-.src-ef{background:var(--ef-bg);color:var(--ef)}.src-san{background:var(--san-bg);color:var(--san)}.src-san2{background:#e0e7ff;color:#3730a3}.src-bbva{background:var(--bbva-bg);color:var(--bbva)}.src-ahorro{background:#fce7f3;color:#9d174d}
+.src-ef{background:var(--ef-bg);color:var(--ef)}.src-san{background:var(--san-bg);color:var(--san)}.src-san2{background:#e0e7ff;color:#3730a3}.src-bbva{background:var(--bbva-bg);color:var(--bbva)}.src-bbva-tp{background:#ccfbf1;color:#0f766e}.src-ahorro{background:#fce7f3;color:#9d174d}
 .ai-chip{display:inline-block;font-size:10px;padding:2px 6px;border-radius:20px;background:var(--blue-bg);color:var(--blue);font-weight:500}
 .rule-chip{display:inline-block;font-size:10px;padding:2px 6px;border-radius:20px;background:var(--green-bg);color:var(--green);font-weight:500}
 .batch-chip{display:inline-block;font-size:10px;padding:2px 7px;border-radius:20px;background:var(--amber-bg);color:var(--amber);font-weight:500}
@@ -548,8 +551,8 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
   const byCat={};filteredTxs.filter(t=>t.amount<0&&t.category).forEach(t=>{byCat[t.category]=(byCat[t.category]||0)+Math.abs(t.amount);});
   const topCats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const totalCatExp=topCats.reduce((s,[,v])=>s+v,0);
-  const srcColor=(s)=>({"Efectivo":"var(--ef)","Santander 1":"var(--san)","Santander 2":"var(--san2)","BBVA":"var(--bbva)","Ahorro":"#9d174d"})[s]||"var(--muted)";
-  const srcBg=(s)=>({"Efectivo":"var(--ef-bg)","Santander 1":"var(--san-bg)","Santander 2":"var(--san2-bg)","BBVA":"var(--bbva-bg)","Ahorro":"#fce7f3"})[s]||"var(--s2)";
+  const srcColor=(s)=>({"Efectivo":"var(--ef)","Santander":"var(--san)","Santander Ahorro":"var(--san2)","BBVA":"var(--bbva)","BBVA Tarjeta Prepago":"#0f766e","Ahorro":"#9d174d"})[s]||"var(--muted)";
+  const srcBg=(s)=>({"Efectivo":"var(--ef-bg)","Santander":"var(--san-bg)","Santander Ahorro":"var(--san2-bg)","BBVA":"var(--bbva-bg)","BBVA Tarjeta Prepago":"#ccfbf1","Ahorro":"#fce7f3"})[s]||"var(--s2)";
   return(
     <div>
       <div style={{marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
@@ -628,7 +631,7 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
 
 function MiniTxRow({tx}){
   const isIncome=tx.amount>0;
-  const srcClass=({"Efectivo":"src-ef","Santander 1":"src-san","Santander 2":"src-san2","BBVA":"src-bbva","Ahorro":"src-ahorro"})[tx.source]||"src-ef";
+  const srcClass=({"Efectivo":"src-ef","Santander":"src-san","Santander Ahorro":"src-san2","BBVA":"src-bbva","BBVA Tarjeta Prepago":"src-bbva-tp","Ahorro":"src-ahorro"})[tx.source]||"src-ef";
   return(
     <tr>
       <td style={{color:"var(--muted)",fontSize:12,whiteSpace:"nowrap"}}>{fmtDate(tx.date)}</td>
@@ -664,7 +667,7 @@ function Transactions({filteredTxs,source,periodLabel,structure,onAdd,onEdit,onU
       return sortDir==="desc"?-cmp:cmp;
     });
 
-  const srcClass=(s)=>({"Efectivo":"src-ef","Santander 1":"src-san","Santander 2":"src-san2","BBVA":"src-bbva","Ahorro":"src-ahorro"})[s]||"src-ef";
+  const srcClass=(s)=>({"Efectivo":"src-ef","Santander":"src-san","Santander Ahorro":"src-san2","BBVA":"src-bbva","BBVA Tarjeta Prepago":"src-bbva-tp","Ahorro":"src-ahorro"})[s]||"src-ef";
   const sortIcon=(field)=>sortBy===field?(sortDir==="desc"?"↓":"↑"):"↕";
 
   return(
@@ -694,7 +697,7 @@ function Transactions({filteredTxs,source,periodLabel,structure,onAdd,onEdit,onU
               <tbody>
                 {shown.map(tx=>{
                   const isIncome=tx.amount>0;
-                  const srcCls=({"Efectivo":"src-ef","Santander 1":"src-san","Santander 2":"src-san2","BBVA":"src-bbva","Ahorro":"src-ahorro"})[tx.source]||"src-ef";
+                  const srcCls=({"Efectivo":"src-ef","Santander":"src-san","Santander Ahorro":"src-san2","BBVA":"src-bbva","BBVA Tarjeta Prepago":"src-bbva-tp","Ahorro":"src-ahorro"})[tx.source]||"src-ef";
                   const availCats=[...structure.gastos.flatMap(f=>f.grupos.flatMap(g=>g.items)),...structure.ingresos.flatMap(g=>g.items)];
                   return(
                     <tr key={tx.id}>
@@ -781,7 +784,7 @@ function Comparison({transactions,budgets,selMonth,periodMode,activeMonths,perio
                 const fItems=fuente.grupos.flatMap(g=>g.items.map(i=>i.label));
                 const fReal=fItems.reduce((s,i)=>s+realForCat(i),0);
                 const fBudget=fItems.reduce((s,i)=>{const b=getBudget(i);return b!==null?s+b:s;},0);
-                const fColor=({"Efectivo":"var(--ef)","Santander 1":"var(--san)","Santander 2":"var(--san2)","BBVA":"var(--bbva)"})[fuente.fuente]||"var(--muted)";
+                const fColor=({"Efectivo":"var(--ef)","Santander":"var(--san)","Santander Ahorro":"var(--san2)","BBVA":"var(--bbva)","BBVA Tarjeta Prepago":"#0f766e"})[fuente.fuente]||"var(--muted)";
                 return(<>
                   <tr className="frow" key={fuente.id}><td colSpan={5} style={{color:fColor}}>{fuente.label}</td></tr>
                   {fuente.grupos.map(g=>{
@@ -856,7 +859,7 @@ function Budgets({budgets,setBudgets,selMonth,periodMode,activeMonths,periodLabe
   const getVal=(label)=>{const e=local[label];if(!e)return"";const key=mode==="annual"?"*":selMonth;return e[key]??e["*"]??"";}
   const save=()=>{setBudgets(local);showToast("Presupuestos guardados");};
   const renderSection=(title,grupos,color)=>{const isOpen=open===title;return(<div key={title}><div className="acc-hdr" onClick={()=>setOpen(isOpen?null:title)}><span style={{fontWeight:600,fontSize:13,color}}>{title}</span><span style={{color:"var(--hint)",fontSize:11}}>{isOpen?"▲":"▼"}</span></div>{isOpen&&<div className="acc-body">{grupos.map(g=>(<div key={g.id}><div style={{padding:"6px 14px",fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".07em",background:"var(--s2)"}}>{g.label}</div>{g.items.map(item=>{const real=monthTxs.filter(t=>t.category===item.label).reduce((s,t)=>s+Math.abs(t.amount),0);return(<div key={item.id} style={{display:"flex",alignItems:"center",gap:9,padding:"7px 14px 7px 24px",borderBottom:"1px solid var(--border)"}}><span style={{flex:1,fontSize:13,color:"var(--text)",fontWeight:500}}>{item.label}</span>{real>0&&<span style={{fontSize:11,color:"var(--red)",fontWeight:600}}>Real: {fmt(real)}</span>}<input type="number" min="0" step="10" value={getVal(item.label)} onChange={e=>setVal(item.label,e.target.value)} placeholder="—" style={{width:100,background:"#fff",border:"1px solid var(--border)",color:"var(--text)",borderRadius:7,padding:"5px 9px",fontSize:13,fontFamily:"var(--ff)",outline:"none",textAlign:"right"}}/><span style={{fontSize:11,color:"var(--hint)",width:12}}>€</span></div>);})}</div>))}</div>}</div>);};
-  return(<div><div className="sh"><div className="sh-title">Presupuestos</div><div className="fg"><div className="period-tabs"><button className={`period-tab${mode==="monthly"?" active":""}`} onClick={()=>setMode("monthly")}>Este mes</button><button className={`period-tab${mode==="annual"?" active":""}`} onClick={()=>setMode("annual")}>Todos los meses</button></div><button className="btn btn-p" onClick={save}>💾 Guardar</button></div></div><div style={{fontSize:12,color:"var(--muted)",marginBottom:13,padding:"8px 12px",background:"var(--accent-light)",borderRadius:8,border:"1px solid #93c5fd"}}>{mode==="annual"?"Los valores anuales se aplican a todos los meses. Puedes sobreescribirlos mes a mes.":"Presupuesto específico para "+MONTHS_FULL[parseInt(selMonth.split("-")[1])-1]+" "+selMonth.split("-")[0]+"."}</div>{structure.gastos.map(f=>renderSection(f.label,f.grupos,({"Efectivo":"var(--ef)","Santander 1":"var(--san)","Santander 2":"var(--san2)","BBVA":"var(--bbva)"})[f.fuente]||"var(--muted)"))}{renderSection("Ingresos",structure.ingresos,"var(--green)")}<div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}><button className="btn btn-p" onClick={save}>💾 Guardar presupuestos</button></div></div>);
+  return(<div><div className="sh"><div className="sh-title">Presupuestos</div><div className="fg"><div className="period-tabs"><button className={`period-tab${mode==="monthly"?" active":""}`} onClick={()=>setMode("monthly")}>Este mes</button><button className={`period-tab${mode==="annual"?" active":""}`} onClick={()=>setMode("annual")}>Todos los meses</button></div><button className="btn btn-p" onClick={save}>💾 Guardar</button></div></div><div style={{fontSize:12,color:"var(--muted)",marginBottom:13,padding:"8px 12px",background:"var(--accent-light)",borderRadius:8,border:"1px solid #93c5fd"}}>{mode==="annual"?"Los valores anuales se aplican a todos los meses. Puedes sobreescribirlos mes a mes.":"Presupuesto específico para "+MONTHS_FULL[parseInt(selMonth.split("-")[1])-1]+" "+selMonth.split("-")[0]+"."}</div>{structure.gastos.map(f=>renderSection(f.label,f.grupos,({"Efectivo":"var(--ef)","Santander":"var(--san)","Santander Ahorro":"var(--san2)","BBVA":"var(--bbva)","BBVA Tarjeta Prepago":"#0f766e"})[f.fuente]||"var(--muted)"))}{renderSection("Ingresos",structure.ingresos,"var(--green)")}<div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}><button className="btn btn-p" onClick={save}>💾 Guardar presupuestos</button></div></div>);
 }
 
 // ── CRITERIOS ─────────────────────────────────────────────────────────────────
@@ -908,7 +911,7 @@ function StructureEditor({structure,setStructure,showToast}){
   const addGroup=(bid,label,isIng=false)=>{if(!label.trim())return;const next=JSON.parse(JSON.stringify(structure));if(isIng)next.ingresos.push({id:uid(),label:label.trim(),items:[]});else{const b=next.gastos.find(f=>f.id===bid);if(b)b.grupos.push({id:uid(),label:label.trim(),items:[]});}save(next);};
   const IE=({id,val,path})=>{if(editingId===id)return<input className="inline-input" value={editVal} autoFocus onChange={e=>setEditVal(e.target.value)} onBlur={()=>renameItem(path,editVal)} onKeyDown={e=>{if(e.key==="Enter")renameItem(path,editVal);if(e.key==="Escape")setEditingId(null);}}/>;return<span style={{fontSize:13,flex:1,cursor:"text",color:"var(--text)",fontWeight:500}} onDoubleClick={()=>{setEditingId(id);setEditVal(val);}}>{val} <span style={{fontSize:10,color:"var(--hint)"}}>✎</span></span>;};
   const AddLine=({placeholder,onAdd})=>{const[v,setV]=useState("");return<div style={{display:"flex",gap:5,padding:"6px 10px"}}><input value={v} onChange={e=>setV(e.target.value)} placeholder={placeholder} onKeyDown={e=>{if(e.key==="Enter"&&v.trim()){onAdd(v.trim());setV("");}}} style={{flex:1,background:"var(--s2)",border:"1px dashed var(--border2)",color:"var(--text)",borderRadius:6,padding:"4px 9px",fontSize:12,fontFamily:"var(--ff)",outline:"none"}}/><button className="btn btn-g btn-sm" onClick={()=>{if(v.trim()){onAdd(v.trim());setV("");}}}>+ Añadir</button></div>;};
-  const renderBloque=(fuente)=>{const isOpen=open===fuente.id;const fColor=({"Efectivo":"var(--ef)","Santander 1":"var(--san)","Santander 2":"var(--san2)","BBVA":"var(--bbva)"})[fuente.fuente]||"var(--muted)";const fBg=({"Efectivo":"var(--ef-bg)","Santander 1":"var(--san-bg)","Santander 2":"var(--san2-bg)","BBVA":"var(--bbva-bg)"})[fuente.fuente]||"var(--s2)";return(<div key={fuente.id} style={{marginBottom:8}}><div className="acc-hdr"><div style={{flex:1,display:"flex",alignItems:"center",gap:8}} onClick={()=>setOpen(isOpen?null:fuente.id)}><IE id={`b-${fuente.id}`} val={fuente.label} path={{type:"bloque",bid:fuente.id}}/><span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:fBg,color:fColor,fontWeight:600}}>{fuente.fuente}</span></div><button className="btn btn-d btn-sm" style={{padding:"2px 7px",marginLeft:4}} onClick={()=>deleteItem({type:"bloque",bid:fuente.id})}>✕</button><span style={{color:"var(--hint)",fontSize:11,marginLeft:6}} onClick={()=>setOpen(isOpen?null:fuente.id)}>{isOpen?"▲":"▼"}</span></div>{isOpen&&<div className="acc-body">{fuente.grupos.map(g=>(<div key={g.id} style={{margin:"6px 10px",border:"1px solid var(--border)",borderRadius:8,overflow:"hidden"}}><div style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",background:"var(--s2)"}}><IE id={`g-${g.id}`} val={g.label} path={{type:"grupo",bid:fuente.id,gid:g.id}}/><button className="btn btn-d btn-sm" style={{padding:"2px 7px",fontSize:11}} onClick={()=>deleteItem({type:"grupo",bid:fuente.id,gid:g.id})}>✕</button></div>{g.items.map(item=>(<div key={item.id} className="editable-row" style={{paddingLeft:22}}><IE id={`i-${item.id}`} val={item.label} path={{type:"item",gid:g.id,iid:item.id}}/><button className="btn btn-d btn-sm" style={{padding:"1px 6px",fontSize:11,opacity:.6}} onClick={()=>deleteItem({type:"item",gid:g.id,iid:item.id})}>✕</button></div>))}<AddLine placeholder="+ Nueva partida (Enter para añadir)..." onAdd={label=>addToGroup(g.id,label)}/></div>))}<AddLine placeholder="+ Nuevo grupo..." onAdd={label=>addGroup(fuente.id,label)}/></div>}</div>);};
+  const renderBloque=(fuente)=>{const isOpen=open===fuente.id;const fColor=({"Efectivo":"var(--ef)","Santander":"var(--san)","Santander Ahorro":"var(--san2)","BBVA":"var(--bbva)","BBVA Tarjeta Prepago":"#0f766e"})[fuente.fuente]||"var(--muted)";const fBg=({"Efectivo":"var(--ef-bg)","Santander":"var(--san-bg)","Santander Ahorro":"var(--san2-bg)","BBVA":"var(--bbva-bg)","BBVA Tarjeta Prepago":"#ccfbf1"})[fuente.fuente]||"var(--s2)";return(<div key={fuente.id} style={{marginBottom:8}}><div className="acc-hdr"><div style={{flex:1,display:"flex",alignItems:"center",gap:8}} onClick={()=>setOpen(isOpen?null:fuente.id)}><IE id={`b-${fuente.id}`} val={fuente.label} path={{type:"bloque",bid:fuente.id}}/><span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:fBg,color:fColor,fontWeight:600}}>{fuente.fuente}</span></div><button className="btn btn-d btn-sm" style={{padding:"2px 7px",marginLeft:4}} onClick={()=>deleteItem({type:"bloque",bid:fuente.id})}>✕</button><span style={{color:"var(--hint)",fontSize:11,marginLeft:6}} onClick={()=>setOpen(isOpen?null:fuente.id)}>{isOpen?"▲":"▼"}</span></div>{isOpen&&<div className="acc-body">{fuente.grupos.map(g=>(<div key={g.id} style={{margin:"6px 10px",border:"1px solid var(--border)",borderRadius:8,overflow:"hidden"}}><div style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",background:"var(--s2)"}}><IE id={`g-${g.id}`} val={g.label} path={{type:"grupo",bid:fuente.id,gid:g.id}}/><button className="btn btn-d btn-sm" style={{padding:"2px 7px",fontSize:11}} onClick={()=>deleteItem({type:"grupo",bid:fuente.id,gid:g.id})}>✕</button></div>{g.items.map(item=>(<div key={item.id} className="editable-row" style={{paddingLeft:22}}><IE id={`i-${item.id}`} val={item.label} path={{type:"item",gid:g.id,iid:item.id}}/><button className="btn btn-d btn-sm" style={{padding:"1px 6px",fontSize:11,opacity:.6}} onClick={()=>deleteItem({type:"item",gid:g.id,iid:item.id})}>✕</button></div>))}<AddLine placeholder="+ Nueva partida (Enter para añadir)..." onAdd={label=>addToGroup(g.id,label)}/></div>))}<AddLine placeholder="+ Nuevo grupo..." onAdd={label=>addGroup(fuente.id,label)}/></div>}</div>);};
   return(<div><div className="sh"><div className="sh-title">Estructura de categorías</div><div style={{fontSize:12,color:"var(--muted)"}}>Doble clic para renombrar · ✕ para eliminar · Enter para añadir</div></div>{structure.gastos.map(f=>renderBloque(f))}<div style={{marginBottom:8}}><div className="acc-hdr" onClick={()=>setOpen(open==="ing"?null:"ing")}><span style={{fontWeight:600,fontSize:13,color:"var(--green)"}}>Ingresos</span><span style={{color:"var(--hint)",fontSize:11}}>{open==="ing"?"▲":"▼"}</span></div>{open==="ing"&&<div className="acc-body">{structure.ingresos.map(g=>(<div key={g.id} style={{margin:"6px 10px",border:"1px solid var(--border)",borderRadius:8,overflow:"hidden"}}><div style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",background:"var(--s2)"}}><IE id={`ig-${g.id}`} val={g.label} path={{type:"grupo",bid:"ing",gid:g.id}}/><button className="btn btn-d btn-sm" style={{padding:"2px 7px",fontSize:11}} onClick={()=>deleteItem({type:"grupo",bid:"ing",gid:g.id})}>✕</button></div>{g.items.map(item=>(<div key={item.id} className="editable-row" style={{paddingLeft:22}}><IE id={`ii-${item.id}`} val={item.label} path={{type:"item",gid:g.id,iid:item.id}}/><button className="btn btn-d btn-sm" style={{padding:"1px 6px",fontSize:11,opacity:.6}} onClick={()=>deleteItem({type:"item",gid:g.id,iid:item.id})}>✕</button></div>))}<AddLine placeholder="+ Nueva partida..." onAdd={label=>addToGroup(g.id,label)}/></div>))}<AddLine placeholder="+ Nuevo grupo de ingresos..." onAdd={label=>addGroup(null,label,true)}/></div>}</div><div className="card" style={{marginTop:14}}><div className="card-title">Añadir nuevo bloque de gastos</div><NewBloqueForm onAdd={(label,fuente)=>{const next=JSON.parse(JSON.stringify(structure));next.gastos.push({id:uid(),fuente,label,grupos:[]});save(next);}}/></div></div>);
 }
 
@@ -919,7 +922,7 @@ function Import({onImport,showToast,batches,onDeleteBatch}){
   const [dragging,setDragging]=useState(false);
   const [processing,setProcessing]=useState(false);
   const [preview,setPreview]=useState([]);
-  const [previewSrc,setPreviewSrc]=useState("Santander 1");
+  const [previewSrc,setPreviewSrc]=useState("Santander");
   const fileRef=useRef();
 
   const processFile=async(file)=>{
@@ -935,26 +938,48 @@ function Import({onImport,showToast,batches,onDeleteBatch}){
         const{read,utils}=await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
         const wb=read(await file.arrayBuffer());
         const ws=wb.Sheets[wb.SheetNames[0]];
-        // Read as raw strings to handle Spanish number format
-        const rows=utils.sheet_to_json(ws,{header:1,raw:false});
-        // Find the header row (contains 'Fecha operación' or 'Concepto')
-        let dataStart = 1;
-        for (let i = 0; i < Math.min(rows.length, 15); i++) {
-          const row = rows[i];
-          if (row && row.some(cell => cell && String(cell).includes('Concepto'))) {
-            dataStart = i + 1; // data starts after header
+        // Read with raw numbers for BBVA (which uses real numbers, not text)
+        const rowsRaw=utils.sheet_to_json(ws,{header:1,raw:true});
+        const rowsStr=utils.sheet_to_json(ws,{header:1,raw:false});
+
+        // Find header row (contains 'Concepto' or 'Importe')
+        let dataStart=1;
+        let format="santander"; // default
+        for(let i=0;i<Math.min(rowsStr.length,15);i++){
+          const row=rowsStr[i];
+          if(!row) continue;
+          const rowText=row.map(c=>String(c||"").toLowerCase()).join("|");
+          if(rowText.includes("concepto")&&rowText.includes("importe")){
+            dataStart=i+1;
+            // Detect BBVA: has 'fecha valor' and 'movimiento' columns, data in col B onwards
+            if(rowText.includes("fecha valor")&&rowText.includes("movimiento")) format="bbva";
             break;
           }
         }
-        raw=rows.slice(dataStart).map(r=>{
-          if(!r||r.length<4) return null;
-          // Col A=fecha operación, B=fecha valor (skip), C=concepto, D=importe, E=saldo (skip)
-          const date=parseExcelDate(r[0]);
-          const description=String(r[2]||"").trim();
-          const amount=parseSpanishNumber(r[3]); // Column D = Importe
-          if(isNaN(amount)||!description||!r[0]) return null;
-          return{date,description,amount};
-        }).filter(Boolean);
+
+        if(format==="bbva"){
+          // BBVA: B=FechaValor, C=Fecha, D=Concepto, E=Movimiento, F=Importe (real number)
+          raw=rowsRaw.slice(dataStart).map(r=>{
+            if(!r||!r[2]) return null;
+            const date=parseExcelDate(r[2]); // Col C = Fecha operación
+            const concepto=String(r[3]||"").trim();
+            const movimiento=String(r[4]||"").trim();
+            const description=movimiento&&movimiento!==concepto?`${concepto} - ${movimiento}`:concepto;
+            const amount=parseFloat(r[5]); // Col F = Importe (already a number)
+            if(isNaN(amount)||!description) return null;
+            return{date,description,amount};
+          }).filter(Boolean);
+        } else {
+          // Santander: A=Fecha, B=FechaValor, C=Concepto, D=Importe(text), E=Saldo
+          raw=rowsStr.slice(dataStart).map(r=>{
+            if(!r||r.length<4) return null;
+            const date=parseExcelDate(r[0]);
+            const description=String(r[2]||"").trim();
+            const amount=parseSpanishNumber(r[3]);
+            if(isNaN(amount)||!description||!r[0]) return null;
+            return{date,description,amount};
+          }).filter(Boolean);
+        }
       }
       else{showToast("Formato no soportado: usa PDF, CSV o Excel","✕");}
       setPreview(raw);
