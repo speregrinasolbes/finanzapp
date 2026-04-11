@@ -513,7 +513,7 @@ export default function App() {
           </div>
         </header>
         <nav className="nav">
-          {[["dashboard","📊 Resumen"],["transactions","💳 Movimientos"],["comparison","📋 Ppto. vs Real"],["budgets","🎯 Presupuestos"],["rules","⚡ Criterios IA"],["structure","🗂 Estructura"],["import","📤 Importar"]].map(([id,l])=>(
+          {[["dashboard","📊 Resumen"],["transactions","💳 Movimientos"],["comparison","📋 Ppto. vs Real"],["budgets","🎯 Presupuestos"],["ahorro","💰 Ahorro"],["rules","⚡ Criterios IA"],["structure","🗂 Estructura"],["import","📤 Importar"]].map(([id,l])=>(
             <button key={id} className={`nb${tab===id?" active":""}`} onClick={()=>setTab(id)}>{l}</button>
           ))}
         </nav>
