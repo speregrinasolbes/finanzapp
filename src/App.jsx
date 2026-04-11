@@ -68,9 +68,8 @@ const fmtDate = (iso) => {
 };
 const today = () => new Date().toISOString().slice(0, 10);
 const currentYM = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
-const fmt = (n, compact=false) => {
+const fmt = (n) => {
   if (n===null||n===undefined||isNaN(n)) return "—";
-  // Always use thousands separator and 2 decimals in Spanish format
   return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
 };
 
@@ -285,6 +284,46 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff);font-size:14px
 `;
 
 // ── APP ───────────────────────────────────────────────────────────────────────
+
+// ── Shared period selector component ─────────────────────────────────────────
+function MonthOpts() {
+  return Array.from({length:28},(_,i)=>{
+    const d=new Date(); d.setMonth(d.getMonth()-i);
+    const v=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    return <option key={v} value={v}>{MONTHS_FULL[d.getMonth()]} {d.getFullYear()}</option>;
+  });
+}
+
+function PeriodSelector({selMonth,setSelMonth,periodMode,setPeriodMode,rangeFrom,setRangeFrom,rangeTo,setRangeTo,dark=false}) {
+  const tabCls = dark ? "src-tab" : "period-tab";
+  const tabsCls = dark ? "src-tabs" : "period-tabs";
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      <div className={tabsCls} style={dark?{}:{}}>
+        {[["month","Mes"],["year","Año"],["range","Período"]].map(([v,l])=>(
+          <button key={v} className={`${tabCls}${periodMode===v?" active":""}`} onClick={()=>setPeriodMode(v)}>{l}</button>
+        ))}
+      </div>
+      {periodMode==="month" && (
+        <select className={dark?"msel-hdr":"msel"} value={selMonth} onChange={e=>setSelMonth(e.target.value)}>
+          <MonthOpts/>
+        </select>
+      )}
+      {periodMode==="year" && (
+        <select className={dark?"msel-hdr":"msel"} value={selMonth.slice(0,4)+"-01"} onChange={e=>setSelMonth(e.target.value)}>
+          {Array.from({length:5},(_,i)=>{const y=new Date().getFullYear()-i;return<option key={y} value={`${y}-01`}>{y}</option>;})}
+        </select>
+      )}
+      {periodMode==="range" && <>
+        <span style={{fontSize:12,color:dark?"rgba(255,255,255,.7)":"var(--muted)"}}>Desde</span>
+        <select className={dark?"msel-hdr":"msel"} value={rangeFrom} onChange={e=>setRangeFrom(e.target.value)}><MonthOpts/></select>
+        <span style={{fontSize:12,color:dark?"rgba(255,255,255,.7)":"var(--muted)"}}>hasta</span>
+        <select className={dark?"msel-hdr":"msel"} value={rangeTo} onChange={e=>setRangeTo(e.target.value)}><MonthOpts/></select>
+      </>}
+    </div>
+  );
+}
+
 export default function App() {
   const [tab,setTab]=useState("dashboard");
   const [source,setSource]=useState("Todos");
@@ -294,6 +333,10 @@ export default function App() {
   const [rules,setRules]=useState(()=>LS.get("fin_rules",[]));
   const [batches,setBatches]=useState(()=>LS.get("fin_batches",[])); // [{id,label,date,count}]
   const [selMonth,setSelMonth]=useState(currentYM);
+  // Shared period filter (used by Dashboard, Movimientos, Presupuestos, Ppto vs Real)
+  const [periodMode,setPeriodMode]=useState("month"); // month | year | range
+  const [rangeFrom,setRangeFrom]=useState(currentYM);
+  const [rangeTo,setRangeTo]=useState(currentYM);
   const [modal,setModal]=useState(null);
   const [editTx,setEditTx]=useState(null);
   const [toast,setToast]=useState(null);
@@ -315,7 +358,19 @@ export default function App() {
     return tx;
   },[rules]);
 
-  const filteredTxs=transactions.filter(t=>t.date?.startsWith(selMonth)&&(source==="Todos"||t.source===source));
+  // Compute active months based on period mode
+  const getActiveMonths = () => {
+    const [y,m] = selMonth.split("-");
+    if(periodMode==="month") return [selMonth];
+    if(periodMode==="year") return Array.from({length:12},(_,i)=>`${y}-${String(i+1).padStart(2,"0")}`);
+    const months=[];const[fy,fm]=rangeFrom.split("-").map(Number);const[ty,tm]=rangeTo.split("-").map(Number);
+    let cy=fy,cm=fm;
+    while((cy<ty||(cy===ty&&cm<=tm))&&months.length<36){months.push(`${cy}-${String(cm).padStart(2,"0")}`);cm++;if(cm>12){cm=1;cy++;}}
+    return months;
+  };
+  const activeMonths = getActiveMonths();
+  const periodLabel = (() => { const [y,m]=selMonth.split("-"); return periodMode==="month"?`${MONTHS_FULL[parseInt(m)-1]} ${y}`:periodMode==="year"?`Año ${y}`:`${rangeFrom} → ${rangeTo}`; })();
+  const filteredTxs=transactions.filter(t=>activeMonths.includes(t.date?.slice(0,7))&&(source==="Todos"||t.source===source));
   const income=filteredTxs.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0);
   const expense=filteredTxs.filter(t=>t.amount<0).reduce((s,t)=>s+Math.abs(t.amount),0);
 
@@ -420,7 +475,7 @@ export default function App() {
 
   const deleteTx=(id)=>{setTransactions(p=>p.filter(t=>t.id!==id));showToast("Eliminado","🗑");setModal(null);setEditTx(null);};
 
-  const MonthOpts=()=>Array.from({length:28},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);const v=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;return<option key={v} value={v}>{MONTHS_FULL[d.getMonth()]} {d.getFullYear()}</option>;});
+
 
   return(
     <>
@@ -436,7 +491,6 @@ export default function App() {
             <div className="src-tabs">
               {["Todos",...SOURCES].map(s=><button key={s} className={`src-tab${source===s?" active":""}`} onClick={()=>setSource(s)}>{s}</button>)}
             </div>
-            <select className="msel-hdr" value={selMonth} onChange={e=>setSelMonth(e.target.value)}><MonthOpts/></select>
             <button className="btn btn-sm" style={{background:"rgba(255,255,255,.2)",color:"#fff",border:"1px solid rgba(255,255,255,.3)"}} onClick={()=>setShowApiModal(true)}>⚙ API Key</button>
           </div>
         </header>
@@ -447,10 +501,10 @@ export default function App() {
         </nav>
         <main className="main">
           {classifying&&<div className="classifying-banner"><span className="spin">⟳</span><span>Clasificando con IA... {classifyProgress}%</span><div style={{flex:1}}><div className="progress-bar"><div className="progress-fill" style={{width:`${classifyProgress}%`,background:"var(--blue)"}}/></div></div></div>}
-          {tab==="dashboard"&&<Dashboard filteredTxs={filteredTxs} income={income} expense={expense} source={source} selMonth={selMonth} transactions={transactions} setTab={setTab}/>}
-          {tab==="transactions"&&<Transactions filteredTxs={filteredTxs} source={source} structure={structure} onAdd={()=>setModal("add")} onEdit={tx=>{setEditTx(tx);setModal("tx");}} onUpdateCategory={updateTxCategory}/>}
-          {tab==="comparison"&&<Comparison transactions={transactions} budgets={budgets} selMonth={selMonth} source={source} structure={structure}/>}
-          {tab==="budgets"&&<Budgets budgets={budgets} setBudgets={setBudgets} selMonth={selMonth} monthTxs={transactions.filter(t=>t.date?.startsWith(selMonth))} showToast={showToast} structure={structure}/>}
+          {tab==="dashboard"&&<Dashboard filteredTxs={filteredTxs} income={income} expense={expense} source={source} selMonth={selMonth} periodLabel={periodLabel} transactions={transactions} setTab={setTab}/>}
+          {tab==="transactions"&&<Transactions filteredTxs={filteredTxs} source={source} periodLabel={periodLabel} structure={structure} onAdd={()=>setModal("add")} onEdit={tx=>{setEditTx(tx);setModal("tx");}} onUpdateCategory={updateTxCategory}/>}
+          {tab==="comparison"&&<Comparison transactions={transactions} budgets={budgets} selMonth={selMonth} periodMode={periodMode} activeMonths={activeMonths} periodLabel={periodLabel} source={source} structure={structure}/>}
+          {tab==="budgets"&&<Budgets budgets={budgets} setBudgets={setBudgets} selMonth={selMonth} periodMode={periodMode} activeMonths={activeMonths} periodLabel={periodLabel} monthTxs={transactions.filter(t=>activeMonths.includes(t.date?.slice(0,7)))} showToast={showToast} structure={structure}/>}
           {tab==="rules"&&<Rules rules={rules} setRules={setRules} structure={structure} showToast={showToast}/>}
           {tab==="structure"&&<StructureEditor structure={structure} setStructure={setStructure} showToast={showToast}/>}
           {tab==="import"&&<Import onImport={importTxs} showToast={showToast} batches={batches} onDeleteBatch={deleteBatch}/>}
@@ -464,7 +518,7 @@ export default function App() {
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
-function Dashboard({filteredTxs,income,expense,source,selMonth,transactions,setTab}){
+function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,transactions,setTab}){
   const balance=income-expense;
   const [y,m]=selMonth.split("-");
   const months6=Array.from({length:6},(_,i)=>{const d=new Date(parseInt(y),parseInt(m)-1-(5-i),1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;});
@@ -478,10 +532,14 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,transactions,setT
   const srcBg=(s)=>s==="Efectivo"?"var(--ef-bg)":s==="Santander"?"var(--san-bg)":"var(--bbva-bg)";
   return(
     <div>
+      <div style={{marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+        <div style={{fontFamily:"var(--fd)",fontSize:16,color:"var(--text)"}}>{periodLabel}</div>
+        <div style={{fontSize:12,color:"var(--muted)"}}>{filteredTxs.length} movimientos en el período</div>
+      </div>
       <div className="kpi-row">
-        <div className="kpi kpi-green"><div className="kpi-label">Ingresos</div><div className="kpi-val g">{fmt(income,true)}</div><div className="kpi-sub">{filteredTxs.filter(t=>t.amount>0).length} movimientos</div></div>
-        <div className="kpi kpi-red"><div className="kpi-label">Gastos</div><div className="kpi-val r">{fmt(expense,true)}</div><div className="kpi-sub">{filteredTxs.filter(t=>t.amount<0).length} movimientos</div></div>
-        <div className="kpi kpi-blue"><div className="kpi-label">Balance</div><div className={`kpi-val ${balance>=0?"g":"r"}`}>{fmt(balance,true)}</div><div className="kpi-sub">{balance>=0?"Mes positivo ✓":"Mes en déficit"}</div></div>
+        <div className="kpi kpi-green"><div className="kpi-label">Ingresos</div><div className="kpi-val g">{fmt(income)}</div><div className="kpi-sub">{filteredTxs.filter(t=>t.amount>0).length} movimientos</div></div>
+        <div className="kpi kpi-red"><div className="kpi-label">Gastos</div><div className="kpi-val r">{fmt(expense)}</div><div className="kpi-sub">{filteredTxs.filter(t=>t.amount<0).length} movimientos</div></div>
+        <div className="kpi kpi-blue"><div className="kpi-label">Balance</div><div className={`kpi-val ${balance>=0?"g":"r"}`}>{fmt(balance)}</div><div className="kpi-sub">{balance>=0?"Mes positivo ✓":"Mes en déficit"}</div></div>
         <div className="kpi kpi-amber"><div className="kpi-label">Sin clasificar</div><div className="kpi-val b">{filteredTxs.filter(t=>!t.category).length}</div><div className="kpi-sub">de {filteredTxs.length} movimientos</div></div>
       </div>
       <div className="grid2" style={{marginBottom:14}}>
@@ -498,7 +556,7 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,transactions,setT
           {srcBreakdown.map((s,i)=>(<div key={s.name} style={{marginBottom:i<srcBreakdown.length-1?14:0}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:5,alignItems:"center"}}>
               <span style={{fontSize:13,fontWeight:600,color:srcColor(s.name),background:srcBg(s.name),padding:"2px 9px",borderRadius:20}}>{s.name}</span>
-              <span style={{color:"var(--red)",fontWeight:600,fontSize:13}}>{fmt(s.exp,true)}</span>
+              <span style={{color:"var(--red)",fontWeight:600,fontSize:13}}>{fmt(s.exp)}</span>
             </div>
             <div className="bbar"><div className="bbar-fill" style={{width:`${Math.round(s.exp/maxSrc*100)}%`,background:srcColor(s.name)}}/></div>
           </div>))}
@@ -507,7 +565,7 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,transactions,setT
       {topCats.length>0&&<div className="card" style={{marginBottom:14}}>
         <div className="card-title">Top categorías del mes</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10}}>
-          {topCats.map(([cat,amt])=>{const pct=totalCatExp>0?Math.round(amt/totalCatExp*100):0;return(<div key={cat} style={{background:"var(--s2)",borderRadius:9,padding:"10px 12px",border:"1px solid var(--border)"}}><div style={{fontSize:12,fontWeight:600,marginBottom:6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:"var(--text)"}}>{cat}</div><div className="bbar" style={{marginBottom:5}}><div className="bbar-fill" style={{width:`${pct}%`,background:"var(--red)"}}/></div><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"var(--muted)"}}><span style={{color:"var(--red)",fontWeight:600}}>{fmt(amt,true)}</span><span>{pct}%</span></div></div>);})}
+          {topCats.map(([cat,amt])=>{const pct=totalCatExp>0?Math.round(amt/totalCatExp*100):0;return(<div key={cat} style={{background:"var(--s2)",borderRadius:9,padding:"10px 12px",border:"1px solid var(--border)"}}><div style={{fontSize:12,fontWeight:600,marginBottom:6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:"var(--text)"}}>{cat}</div><div className="bbar" style={{marginBottom:5}}><div className="bbar-fill" style={{width:`${pct}%`,background:"var(--red)"}}/></div><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"var(--muted)"}}><span style={{color:"var(--red)",fontWeight:600}}>{fmt(amt)}</span><span>{pct}%</span></div></div>);})}
         </div>
       </div>}
       <div className="card">
@@ -527,13 +585,13 @@ function MiniTxRow({tx}){
       <td style={{color:"var(--muted)",fontSize:12,whiteSpace:"nowrap"}}>{fmtDate(tx.date)}</td>
       <td className="tx-desc-cell">{tx.description}</td>
       <td>{tx.source&&<span className={`src-chip ${srcClass}`}>{tx.source}</span>}</td>
-      <td className={`tx-amt-cell ${isIncome?"g":"r"}`}>{isIncome?"+":"-"}{fmt(Math.abs(tx.amount),true)}</td>
+      <td className={`tx-amt-cell ${isIncome?"g":"r"}`}>{isIncome?"+":"-"}{fmt(Math.abs(tx.amount))}</td>
     </tr>
   );
 }
 
 // ── MOVIMIENTOS ───────────────────────────────────────────────────────────────
-function Transactions({filteredTxs,source,structure,onAdd,onEdit,onUpdateCategory}){
+function Transactions({filteredTxs,source,periodLabel,structure,onAdd,onEdit,onUpdateCategory}){
   const [search,setSearch]=useState("");
   const [filterType,setFilterType]=useState("all");
   const [sortBy,setSortBy]=useState("date");
@@ -549,7 +607,7 @@ function Transactions({filteredTxs,source,structure,onAdd,onEdit,onUpdateCategor
   return(
     <div>
       <div className="sh">
-        <div className="sh-title">Movimientos{source!=="Todos"?` · ${source}`:""}</div>
+        <div className="sh-title">Movimientos · {periodLabel}{source!=="Todos"?` · ${source}`:""}</div>
         <button className="btn btn-p btn-sm" onClick={onAdd}>+ Añadir manual</button>
       </div>
       <div className="fg" style={{marginBottom:12}}>
@@ -570,7 +628,7 @@ function Transactions({filteredTxs,source,structure,onAdd,onEdit,onUpdateCategor
                 {shown.map(tx=>{
                   const isIncome=tx.amount>0;
                   const srcCls=tx.source==="Efectivo"?"src-ef":tx.source==="Santander"?"src-san":"src-bbva";
-                  const availCats=isIncome?structure.ingresos.flatMap(g=>g.items):structure.gastos.flatMap(f=>f.grupos.flatMap(g=>g.items));
+                  const availCats=[...structure.gastos.flatMap(f=>f.grupos.flatMap(g=>g.items)),...structure.ingresos.flatMap(g=>g.items)];
                   return(
                     <tr key={tx.id}>
                       <td style={{color:"var(--muted)",fontSize:12,whiteSpace:"nowrap"}}>{fmtDate(tx.date)}</td>
@@ -584,13 +642,16 @@ function Transactions({filteredTxs,source,structure,onAdd,onEdit,onUpdateCategor
                             onChange={e=>onUpdateCategory(tx.id,e.target.value,true)}
                           >
                             <option value="">Sin clasificar</option>
-                            {availCats.map(c=><option key={c.id} value={c.label}>{c.label}</option>)}
+                            <optgroup label="── Gastos ──" style={{color:"var(--muted)"}}/>
+                            {structure.gastos.flatMap(f=>f.grupos.flatMap(g=>g.items)).map(c=><option key={c.id} value={c.label}>{c.label}</option>)}
+                            <optgroup label="── Ingresos ──" style={{color:"var(--muted)"}}/>
+                            {structure.ingresos.flatMap(g=>g.items).map(c=><option key={c.id} value={c.label}>{c.label}</option>)}
                           </select>
                           {tx.aiClassified&&<span className="ai-chip">✦ IA</span>}
                           {tx.ruleClassified&&<span className="rule-chip">⚡ Regla</span>}
                         </div>
                       </td>
-                      <td className={`tx-amt-cell ${isIncome?"g":"r"}`}>{isIncome?"+":"-"}{fmt(Math.abs(tx.amount),true)}</td>
+                      <td className={`tx-amt-cell ${isIncome?"g":"r"}`}>{isIncome?"+":"-"}{fmt(Math.abs(tx.amount))}</td>
                       <td><button className="btn btn-o btn-sm" style={{padding:"3px 8px",fontSize:11}} onClick={()=>onEdit(tx)}>✎</button></td>
                     </tr>
                   );
@@ -605,27 +666,15 @@ function Transactions({filteredTxs,source,structure,onAdd,onEdit,onUpdateCategor
 }
 
 // ── COMPARATIVA ───────────────────────────────────────────────────────────────
-function Comparison({transactions,budgets,selMonth,source,structure}){
+function Comparison({transactions,budgets,selMonth,periodMode,activeMonths,periodLabel,source,structure}){
   const [viewSrc,setViewSrc]=useState("Todos");
-  const [periodMode,setPeriodMode]=useState("month");
-  const [rangeFrom,setRangeFrom]=useState(selMonth);
-  const [rangeTo,setRangeTo]=useState(selMonth);
   useEffect(()=>{if(source!=="Todos")setViewSrc(source);},[source]);
-  const [y,m]=selMonth.split("-");
-  const getMonths=()=>{
-    if(periodMode==="month") return [selMonth];
-    if(periodMode==="year") return Array.from({length:12},(_,i)=>`${y}-${String(i+1).padStart(2,"0")}`);
-    const months=[];const[fy,fm]=rangeFrom.split("-").map(Number);const[ty,tm]=rangeTo.split("-").map(Number);
-    let cy=fy,cm=fm;
-    while((cy<ty||(cy===ty&&cm<=tm))&&months.length<36){months.push(`${cy}-${String(cm).padStart(2,"0")}`);cm++;if(cm>12){cm=1;cy++;}}
-    return months;
-  };
-  const activeMonths=getMonths();
   const getBudget=(label)=>{
     if(periodMode==="month") return budgets[label]?.[selMonth]??budgets[label]?.["*"]??null;
     const monthly=budgets[label]?.["*"]??null;
     return monthly!==null?monthly*activeMonths.length:null;
   };
+  const [y,m]=selMonth.split("-");
   const realForCat=(label,isIncome=false)=>
     transactions.filter(t=>activeMonths.includes(t.date?.slice(0,7))&&t.category===label&&(viewSrc==="Todos"||t.source===viewSrc)&&(isIncome?t.amount>0:t.amount<0))
       .reduce((s,t)=>s+Math.abs(t.amount),0);
@@ -633,7 +682,7 @@ function Comparison({transactions,budgets,selMonth,source,structure}){
   const DiffCell=({budget,real,incomeDir=false})=>{
     if(budget===null||budget===0) return<td className="neutral">—</td>;
     const diff=real-budget;const isOver=incomeDir?diff<0:diff>0;
-    return<td className={isOver?"over":diff===0?"neutral":"under"}>{diff>=0?"+":""}{fmt(diff,true)}</td>;
+    return<td className={isOver?"over":diff===0?"neutral":"under"}>{diff>=0?"+":""}{fmt(diff)}</td>;
   };
   const PctBar=({budget,real})=>{
     if(!budget||budget===0) return<td>—</td>;
@@ -643,7 +692,7 @@ function Comparison({transactions,budgets,selMonth,source,structure}){
 
   const fuentesToShow=viewSrc==="Todos"?structure.gastos:structure.gastos.filter(f=>f.fuente===viewSrc);
   const periodLabel=periodMode==="month"?`${MONTHS_FULL[parseInt(m)-1]} ${y}`:periodMode==="year"?`Año ${y}`:`${rangeFrom} → ${rangeTo}`;
-  const MonthOpts=()=>Array.from({length:28},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);const v=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;return<option key={v} value={v}>{MONTHS_FULL[d.getMonth()]} {d.getFullYear()}</option>;});
+
 
   return(
     <div>
@@ -653,17 +702,7 @@ function Comparison({transactions,budgets,selMonth,source,structure}){
           {["Todos",...SOURCES].map(s=><button key={s} className={`src-tab dark${viewSrc===s?" active":""}`} onClick={()=>setViewSrc(s)}>{s}</button>)}
         </div>
       </div>
-      <div className="fg" style={{marginBottom:14}}>
-        <div className="period-tabs">
-          {[["month","Mes"],["year","Año"],["range","Período"]].map(([v,l])=><button key={v} className={`period-tab${periodMode===v?" active":""}`} onClick={()=>setPeriodMode(v)}>{l}</button>)}
-        </div>
-        {periodMode==="range"&&<>
-          <span style={{fontSize:12,color:"var(--muted)"}}>Desde</span>
-          <select className="msel" value={rangeFrom} onChange={e=>setRangeFrom(e.target.value)}><MonthOpts/></select>
-          <span style={{fontSize:12,color:"var(--muted)"}}>hasta</span>
-          <select className="msel" value={rangeTo} onChange={e=>setRangeTo(e.target.value)}><MonthOpts/></select>
-        </>}
-      </div>
+
       <div style={{fontSize:12,color:"var(--muted)",marginBottom:10,padding:"8px 12px",background:"var(--accent-light)",borderRadius:8,border:"1px solid #93c5fd"}}>
         ℹ La columna <strong>Ejecución</strong> muestra el % del presupuesto consumido. En verde si estás dentro, en rojo si lo has superado.
       </div>
@@ -687,16 +726,16 @@ function Comparison({transactions,budgets,selMonth,source,structure}){
                       {g.items.map(item=>{const b=getBudget(item.label);const r=realForCat(item.label);return(
                         <tr key={item.id}>
                           <td style={{paddingLeft:28,fontSize:12}}>{item.label}</td>
-                          <td style={{color:"var(--muted)"}}>{b!==null?fmt(b,true):"—"}</td>
-                          <td style={{color:r>0?"var(--red)":"var(--hint)",fontWeight:r>0?600:400}}>{r>0?fmt(r,true):"—"}</td>
+                          <td style={{color:"var(--muted)"}}>{b!==null?fmt(b):"—"}</td>
+                          <td style={{color:r>0?"var(--red)":"var(--hint)",fontWeight:r>0?600:400}}>{r>0?fmt(r):"—"}</td>
                           <DiffCell budget={b} real={r}/>
                           <PctBar budget={b} real={r}/>
                         </tr>
                       );})}
                       <tr className="subtotal">
                         <td style={{paddingLeft:16}}>Subtotal {g.label}</td>
-                        <td style={{color:"var(--muted)"}}>{gBudget>0?fmt(gBudget,true):"—"}</td>
-                        <td style={{color:"var(--red)",fontWeight:600}}>{gReal>0?fmt(gReal,true):"—"}</td>
+                        <td style={{color:"var(--muted)"}}>{gBudget>0?fmt(gBudget):"—"}</td>
+                        <td style={{color:"var(--red)",fontWeight:600}}>{gReal>0?fmt(gReal):"—"}</td>
                         <DiffCell budget={gBudget>0?gBudget:null} real={gReal}/>
                         <PctBar budget={gBudget>0?gBudget:null} real={gReal}/>
                       </tr>
@@ -704,8 +743,8 @@ function Comparison({transactions,budgets,selMonth,source,structure}){
                   })}
                   <tr className="subtotal" style={{borderTop:"3px solid var(--border2)"}}>
                     <td style={{paddingLeft:12,color:fColor}}>TOTAL {fuente.label.toUpperCase()}</td>
-                    <td style={{color:"var(--muted)"}}>{fBudget>0?fmt(fBudget,true):"—"}</td>
-                    <td style={{color:"var(--red)",fontWeight:700}}>{fReal>0?fmt(fReal,true):"—"}</td>
+                    <td style={{color:"var(--muted)"}}>{fBudget>0?fmt(fBudget):"—"}</td>
+                    <td style={{color:"var(--red)",fontWeight:700}}>{fReal>0?fmt(fReal):"—"}</td>
                     <DiffCell budget={fBudget>0?fBudget:null} real={fReal}/>
                     <PctBar budget={fBudget>0?fBudget:null} real={fReal}/>
                   </tr>
@@ -720,16 +759,16 @@ function Comparison({transactions,budgets,selMonth,source,structure}){
                   {g.items.map(item=>{const b=getBudget(item.label);const r=realForCat(item.label,true);return(
                     <tr key={item.id}>
                       <td style={{paddingLeft:28,fontSize:12}}>{item.label}</td>
-                      <td style={{color:"var(--muted)"}}>{b!==null?fmt(b,true):"—"}</td>
-                      <td style={{color:r>0?"var(--green)":"var(--hint)",fontWeight:r>0?600:400}}>{r>0?fmt(r,true):"—"}</td>
+                      <td style={{color:"var(--muted)"}}>{b!==null?fmt(b):"—"}</td>
+                      <td style={{color:r>0?"var(--green)":"var(--hint)",fontWeight:r>0?600:400}}>{r>0?fmt(r):"—"}</td>
                       <DiffCell budget={b} real={r} incomeDir/>
                       <PctBar budget={b} real={r}/>
                     </tr>
                   );})}
                   <tr className="subtotal">
                     <td style={{paddingLeft:16}}>Subtotal {g.label}</td>
-                    <td style={{color:"var(--muted)"}}>{gBudget>0?fmt(gBudget,true):"—"}</td>
-                    <td style={{color:"var(--green)",fontWeight:600}}>{gReal>0?fmt(gReal,true):"—"}</td>
+                    <td style={{color:"var(--muted)"}}>{gBudget>0?fmt(gBudget):"—"}</td>
+                    <td style={{color:"var(--green)",fontWeight:600}}>{gReal>0?fmt(gReal):"—"}</td>
                     <DiffCell budget={gBudget>0?gBudget:null} real={gReal} incomeDir/>
                     <PctBar budget={gBudget>0?gBudget:null} real={gReal}/>
                   </tr>
@@ -744,13 +783,13 @@ function Comparison({transactions,budgets,selMonth,source,structure}){
 }
 
 // ── PRESUPUESTOS ──────────────────────────────────────────────────────────────
-function Budgets({budgets,setBudgets,selMonth,monthTxs,showToast,structure}){
+function Budgets({budgets,setBudgets,selMonth,periodMode,activeMonths,periodLabel,monthTxs,showToast,structure}){
   const [local,setLocal]=useState(()=>JSON.parse(JSON.stringify(budgets)));
   const [mode,setMode]=useState("monthly");const [open,setOpen]=useState(null);
   const setVal=(label,val)=>{setLocal(prev=>{const key=mode==="annual"?"*":selMonth;if(!val||val===""){const next={...prev};if(next[label]){const{[key]:_,...rest}=next[label];next[label]=rest;if(!Object.keys(next[label]).length)delete next[label];}return next;}return{...prev,[label]:{...(prev[label]||{}),[key]:parseFloat(val)}};});};
   const getVal=(label)=>{const e=local[label];if(!e)return"";const key=mode==="annual"?"*":selMonth;return e[key]??e["*"]??"";}
   const save=()=>{setBudgets(local);showToast("Presupuestos guardados");};
-  const renderSection=(title,grupos,color)=>{const isOpen=open===title;return(<div key={title}><div className="acc-hdr" onClick={()=>setOpen(isOpen?null:title)}><span style={{fontWeight:600,fontSize:13,color}}>{title}</span><span style={{color:"var(--hint)",fontSize:11}}>{isOpen?"▲":"▼"}</span></div>{isOpen&&<div className="acc-body">{grupos.map(g=>(<div key={g.id}><div style={{padding:"6px 14px",fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".07em",background:"var(--s2)"}}>{g.label}</div>{g.items.map(item=>{const real=monthTxs.filter(t=>t.category===item.label).reduce((s,t)=>s+Math.abs(t.amount),0);return(<div key={item.id} style={{display:"flex",alignItems:"center",gap:9,padding:"7px 14px 7px 24px",borderBottom:"1px solid var(--border)"}}><span style={{flex:1,fontSize:13,color:"var(--text)",fontWeight:500}}>{item.label}</span>{real>0&&<span style={{fontSize:11,color:"var(--red)",fontWeight:600}}>Real: {fmt(real,true)}</span>}<input type="number" min="0" step="10" value={getVal(item.label)} onChange={e=>setVal(item.label,e.target.value)} placeholder="—" style={{width:100,background:"#fff",border:"1px solid var(--border)",color:"var(--text)",borderRadius:7,padding:"5px 9px",fontSize:13,fontFamily:"var(--ff)",outline:"none",textAlign:"right"}}/><span style={{fontSize:11,color:"var(--hint)",width:12}}>€</span></div>);})}</div>))}</div>}</div>);};
+  const renderSection=(title,grupos,color)=>{const isOpen=open===title;return(<div key={title}><div className="acc-hdr" onClick={()=>setOpen(isOpen?null:title)}><span style={{fontWeight:600,fontSize:13,color}}>{title}</span><span style={{color:"var(--hint)",fontSize:11}}>{isOpen?"▲":"▼"}</span></div>{isOpen&&<div className="acc-body">{grupos.map(g=>(<div key={g.id}><div style={{padding:"6px 14px",fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".07em",background:"var(--s2)"}}>{g.label}</div>{g.items.map(item=>{const real=monthTxs.filter(t=>t.category===item.label).reduce((s,t)=>s+Math.abs(t.amount),0);return(<div key={item.id} style={{display:"flex",alignItems:"center",gap:9,padding:"7px 14px 7px 24px",borderBottom:"1px solid var(--border)"}}><span style={{flex:1,fontSize:13,color:"var(--text)",fontWeight:500}}>{item.label}</span>{real>0&&<span style={{fontSize:11,color:"var(--red)",fontWeight:600}}>Real: {fmt(real)}</span>}<input type="number" min="0" step="10" value={getVal(item.label)} onChange={e=>setVal(item.label,e.target.value)} placeholder="—" style={{width:100,background:"#fff",border:"1px solid var(--border)",color:"var(--text)",borderRadius:7,padding:"5px 9px",fontSize:13,fontFamily:"var(--ff)",outline:"none",textAlign:"right"}}/><span style={{fontSize:11,color:"var(--hint)",width:12}}>€</span></div>);})}</div>))}</div>}</div>);};
   return(<div><div className="sh"><div className="sh-title">Presupuestos</div><div className="fg"><div className="period-tabs"><button className={`period-tab${mode==="monthly"?" active":""}`} onClick={()=>setMode("monthly")}>Este mes</button><button className={`period-tab${mode==="annual"?" active":""}`} onClick={()=>setMode("annual")}>Todos los meses</button></div><button className="btn btn-p" onClick={save}>💾 Guardar</button></div></div><div style={{fontSize:12,color:"var(--muted)",marginBottom:13,padding:"8px 12px",background:"var(--accent-light)",borderRadius:8,border:"1px solid #93c5fd"}}>{mode==="annual"?"Los valores anuales se aplican a todos los meses. Puedes sobreescribirlos mes a mes.":"Presupuesto específico para "+MONTHS_FULL[parseInt(selMonth.split("-")[1])-1]+" "+selMonth.split("-")[0]+"."}</div>{structure.gastos.map(f=>renderSection(f.label,f.grupos,f.fuente==="Efectivo"?"var(--ef)":f.fuente==="Santander"?"var(--san)":"var(--bbva)"))}{renderSection("Ingresos",structure.ingresos,"var(--green)")}<div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}><button className="btn btn-p" onClick={save}>💾 Guardar presupuestos</button></div></div>);
 }
 
@@ -895,7 +934,7 @@ function Import({onImport,showToast,batches,onDeleteBatch}){
                   <tr key={i}>
                     <td style={{color:"var(--muted)",fontSize:12,whiteSpace:"nowrap"}}>{fmtDate(t.date)}</td>
                     <td style={{maxWidth:300,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.description}</td>
-                    <td className={`tx-amt-cell ${t.amount>=0?"g":"r"}`}>{t.amount>=0?"+":"-"}{fmt(Math.abs(t.amount),true)}</td>
+                    <td className={`tx-amt-cell ${t.amount>=0?"g":"r"}`}>{t.amount>=0?"+":"-"}{fmt(Math.abs(t.amount))}</td>
                   </tr>
                 ))}
                 {preview.length>30&&<tr><td colSpan={3} style={{textAlign:"center",padding:10,color:"var(--muted)",fontSize:12}}>…y {preview.length-30} más</td></tr>}
@@ -931,7 +970,7 @@ function TxModal({tx,structure,onClose,onSave,onDelete}){
   const [learn,setLearn]=useState(true);
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const origCat=tx?.category;
-  const availableCats=form.type==="ingreso"?structure.ingresos.flatMap(g=>g.items):structure.gastos.flatMap(f=>f.grupos.flatMap(g=>g.items));
+  const allGastos=structure.gastos.flatMap(f=>f.grupos.flatMap(g=>g.items)); const allIngresos=structure.ingresos.flatMap(g=>g.items);
   const handleSave=()=>{if(!form.description||!form.amount)return;const amt=parseFloat(form.amount);const changed=isEdit&&form.category!==origCat;onSave({...(tx||{}),...form,amount:form.type==="ingreso"?Math.abs(amt):-Math.abs(amt),aiClassified:false,ruleClassified:false},changed&&learn);};
   return(
     <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -943,7 +982,9 @@ function TxModal({tx,structure,onClose,onSave,onDelete}){
           <div className="field"><label>Importe (€) *</label><input type="number" min="0" step="0.01" value={form.amount} onChange={e=>set("amount",e.target.value)} placeholder="0.00"/></div>
           <div className="field"><label>Fecha</label><input type="date" value={form.date} onChange={e=>set("date",e.target.value)}/></div>
           <div className="field"><label>Cuenta</label><select value={form.source} onChange={e=>set("source",e.target.value)}>{SOURCES.map(s=><option key={s} value={s}>{s}</option>)}</select></div>
-          <div className="field"><label>Categoría</label><select value={form.category} onChange={e=>set("category",e.target.value)}><option value="">Sin categoría</option>{availableCats.map(c=><option key={c.id} value={c.label}>{c.label}</option>)}</select></div>
+          <div className="field"><label>Categoría</label><select value={form.category} onChange={e=>set("category",e.target.value)}><option value="">Sin categoría</option>
+                <optgroup label="Gastos">{allGastos.map(c=><option key={c.id} value={c.label}>{c.label}</option>)}</optgroup>
+                <optgroup label="Ingresos">{allIngresos.map(c=><option key={c.id} value={c.label}>{c.label}</option>)}</optgroup></select></div>
           <div className="field full"><label>Notas</label><input value={form.notes} onChange={e=>set("notes",e.target.value)} placeholder="Opcional..."/></div>
         </div>
         {isEdit&&form.category&&form.category!==origCat&&(
