@@ -576,25 +576,34 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
         </div>
         <div className="card">
           <div className="card-title">Disponibilidad por cuenta</div>
-          {IMPORT_SOURCES.map((s,i)=>{
-            const saldoInicial=saldosIniciales[s]||0;
-            const movInc=transactions.filter(t=>t.source===s&&t.amount>0).reduce((a,t)=>a+t.amount,0);
-            const movExp=transactions.filter(t=>t.source===s&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0);
-            const saldoActual=saldoInicial+movInc-movExp;
-            return(
-              <div key={s} style={{marginBottom:i<IMPORT_SOURCES.length-1?14:0}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,alignItems:"center"}}>
-                  <span style={{fontSize:13,fontWeight:600,color:srcColor(s),background:srcBg(s),padding:"2px 9px",borderRadius:20}}>{s}</span>
-                  <span style={{fontWeight:700,fontSize:14,color:saldoActual>=0?"var(--green)":"var(--red)"}}>{fmt(saldoActual)}</span>
+          {(()=>{
+            const saldos=IMPORT_SOURCES.map(s=>{
+              const saldoInicial=saldosIniciales[s]||0;
+              const movInc=transactions.filter(t=>t.source===s&&t.amount>0).reduce((a,t)=>a+t.amount,0);
+              const movExp=transactions.filter(t=>t.source===s&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0);
+              return{s,saldoInicial,movInc,movExp,saldoActual:saldoInicial+movInc-movExp};
+            });
+            const totalDisponible=saldos.reduce((a,x)=>a+x.saldoActual,0);
+            return(<>
+              {saldos.map(({s,saldoInicial,movInc,movExp,saldoActual},i)=>(
+                <div key={s} style={{marginBottom:14}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,alignItems:"center"}}>
+                    <span style={{fontSize:13,fontWeight:600,color:srcColor(s),background:srcBg(s),padding:"2px 9px",borderRadius:20}}>{s}</span>
+                    <span style={{fontWeight:700,fontSize:14,color:saldoActual>=0?"var(--green)":"var(--red)"}}>{fmt(saldoActual)}</span>
+                  </div>
+                  {saldosIniciales[s]!==undefined&&<div style={{fontSize:11,color:"var(--muted)",display:"flex",gap:12}}>
+                    <span>Inicial: {fmt(saldoInicial)}</span>
+                    <span style={{color:"var(--green)"}}>+{fmt(movInc)}</span>
+                    <span style={{color:"var(--red)"}}>-{fmt(movExp)}</span>
+                  </div>}
                 </div>
-                {saldosIniciales[s]!==undefined&&<div style={{fontSize:11,color:"var(--muted)",display:"flex",gap:12}}>
-                  <span>Inicial: {fmt(saldoInicial)}</span>
-                  <span style={{color:"var(--green)"}}>+{fmt(movInc)}</span>
-                  <span style={{color:"var(--red)"}}>-{fmt(movExp)}</span>
-                </div>}
+              ))}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"2px solid var(--border)",paddingTop:10,marginTop:4}}>
+                <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>Total disponible</span>
+                <span style={{fontFamily:"var(--fd)",fontSize:18,fontWeight:700,color:totalDisponible>=0?"var(--green)":"var(--red)"}}>{fmt(totalDisponible)}</span>
               </div>
-            );
-          })}
+            </>);
+          })()}
           {ahorro&&<div style={{marginTop:14,paddingTop:12,borderTop:"1px solid var(--border)"}}>
             <div style={{fontSize:11,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Ahorro</div>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
