@@ -236,7 +236,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff);font-size:14px
 .src-tab.active{background:#fff;color:var(--accent)}
 .src-tab.dark{color:var(--muted);background:var(--s2)}.src-tab.dark.active{background:var(--accent);color:#fff}
 
-.nav{background:var(--s1);border-bottom:2px solid var(--border);padding:0 22px;display:flex;gap:0;overflow-x:auto;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.nav{background:var(--s1);border-bottom:2px solid var(--border);padding:0 22px;display:flex;gap:0;overflow-x:auto;box-shadow:0 1px 3px rgba(0,0,0,.06);position:sticky;top:57px;z-index:49}
 .nb{padding:11px 16px;font-size:13px;font-weight:500;color:var(--muted);background:transparent;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;cursor:pointer;white-space:nowrap;transition:all .15s;font-family:var(--ff)}
 .nb:hover{color:var(--text);background:var(--bg)}
 .nb.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--accent-light)}
@@ -793,7 +793,7 @@ function Transactions({filteredTxs,source,periodLabel,structure,onAdd,onEdit,onS
                         </div>
                       </td>
                       <td className={`tx-amt-cell ${isIncome?"g":"r"}`}>{isIncome?"+":"-"}{fmt(Math.abs(tx.amount))}</td>
-                      <td><div style={{display:"flex",gap:4"}}>
+                      <td><div style={{display:"flex",gap:4}}>
                         <button className="btn btn-o btn-sm" style={{padding:"3px 8px",fontSize:11}} onClick={()=>onEdit(tx)} title="Editar">✎</button>
                         <button className="btn btn-o btn-sm" style={{padding:"3px 8px",fontSize:11}} onClick={()=>onSplit(tx)} title="Dividir">⊕</button>
                       </div></td>
