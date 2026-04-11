@@ -509,6 +509,7 @@ export default function App() {
             <div className="src-tabs">
               {["Todos",...SOURCES].map(s=><button key={s} className={`src-tab${source===s?" active":""}`} onClick={()=>setSource(s)}>{s}</button>)}
             </div>
+            <PeriodSelector dark selMonth={selMonth} setSelMonth={setSelMonth} periodMode={periodMode} setPeriodMode={setPeriodMode} rangeFrom={rangeFrom} setRangeFrom={setRangeFrom} rangeTo={rangeTo} setRangeTo={setRangeTo}/>
             <button className="btn btn-sm" style={{background:"rgba(255,255,255,.2)",color:"#fff",border:"1px solid rgba(255,255,255,.3)"}} onClick={()=>setShowApiModal(true)}>⚙ API Key</button>
           </div>
         </header>
@@ -1082,7 +1083,7 @@ function Ahorro({ahorro,setAhorro,saldosIniciales,setSaldosIniciales,transaction
 
   const addFondoEntry=()=>{
     if(!newFondoVal) return;
-    const entry={id:uid(),date:newFondoDate,valor:parseFloat(String(newFondoVal).replace(",",".")),nota:newFondoNota};
+    const entry={id:uid(),date:newFondoDate,valor:parseSpanishNumber(newFondoVal),nota:newFondoNota};
     // Insert sorted by date descending
     setAhorro(p=>({...p,fondo:[entry,...(p.fondo||[])].sort((a,b)=>b.date.localeCompare(a.date))}));
     setNewFondoVal("");setNewFondoNota("");
@@ -1117,13 +1118,16 @@ function Ahorro({ahorro,setAhorro,saldosIniciales,setSaldosIniciales,transaction
                 <div style={{fontSize:12,fontWeight:700,marginBottom:8,color:"var(--text)"}}>{s}</div>
                 <div className="field" style={{marginBottom:8}}>
                   <label>Saldo inicial (€)</label>
-                  <input type="number" step="0.01"
-                    defaultValue={saldosIniciales[s]||""}
+                  <input type="text" inputMode="decimal"
+                    defaultValue={saldosIniciales[s]!=null?String(saldosIniciales[s]).replace(".",","):""}
                     placeholder="0,00"
                     onBlur={e=>{
-                      const v=parseFloat(e.target.value)||0;
-                      setSaldosIniciales(p=>({...p,[s]:v}));
-                      showToast(`Saldo inicial ${s} guardado`);
+                      const v=parseSpanishNumber(e.target.value);
+                      if(!isNaN(v)){
+                        setSaldosIniciales(p=>({...p,[s]:v}));
+                        e.target.value=String(v).replace(".",",");
+                        showToast(`Saldo inicial ${s} guardado`);
+                      }
                     }}
                     style={{background:"#fff",border:"1px solid var(--border)",color:"var(--text)",borderRadius:7,padding:"6px 9px",fontSize:13,fontFamily:"var(--ff)",outline:"none",textAlign:"right"}}
                   />
@@ -1181,7 +1185,7 @@ function Ahorro({ahorro,setAhorro,saldosIniciales,setSaldosIniciales,transaction
             </div>
             <div className="field">
               <label>Valor (€)</label>
-              <input type="number" step="0.01" value={newFondoVal} onChange={e=>setNewFondoVal(e.target.value)} placeholder="0,00" onKeyDown={e=>e.key==="Enter"&&addFondoEntry()}/>
+              <input type="text" inputMode="decimal" value={newFondoVal} onChange={e=>setNewFondoVal(e.target.value)} placeholder="0,00" onKeyDown={e=>e.key==="Enter"&&addFondoEntry()}/>
             </div>
             <div className="field">
               <label>Nota (opcional)</label>
