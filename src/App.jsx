@@ -10,10 +10,12 @@ const saveApiKey = (k) => localStorage.setItem("finanzapp_apikey", k);
 // Parse Spanish number format: "1.034,89" → 1034.89
 function parseSpanishNumber(val) {
   if (val === null || val === undefined || val === "") return NaN;
-  const s = String(val).trim();
-  // Remove thousand separators (.) and replace decimal comma with dot
-  const clean = s.replace(/\./g, "").replace(",", ".");
-  return parseFloat(clean);
+  let s = String(val).trim();
+  // Replace Unicode minus sign (U+2212 −) and non-breaking spaces with standard chars
+  s = s.replace(/\u2212/g, "-").replace(/\u00a0/g, "").replace(/\u00b7/g, "");
+  // Remove thousand separators (.) but only when followed by 3 digits
+  s = s.replace(/\.(\d{3})/g, "$1").replace(",", ".");
+  return parseFloat(s);
 }
 
 const DEFAULT_STRUCTURE = {
@@ -59,11 +61,16 @@ const MONTHS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov
 const MONTHS_FULL = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
 const uid = () => Math.random().toString(36).slice(2, 9);
+const fmtDate = (iso) => {
+  if (!iso || iso.length < 10) return iso || "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y.slice(2)}`; // DD/MM/YY
+};
 const today = () => new Date().toISOString().slice(0, 10);
 const currentYM = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
 const fmt = (n, compact=false) => {
   if (n===null||n===undefined||isNaN(n)) return "—";
-  if (compact && Math.abs(n)>=1000) return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(n);
+  // Always use thousands separator and 2 decimals in Spanish format
   return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
 };
 
@@ -517,7 +524,7 @@ function MiniTxRow({tx}){
   const srcClass=tx.source==="Efectivo"?"src-ef":tx.source==="Santander"?"src-san":"src-bbva";
   return(
     <tr>
-      <td style={{color:"var(--muted)",fontSize:12,whiteSpace:"nowrap"}}>{tx.date}</td>
+      <td style={{color:"var(--muted)",fontSize:12,whiteSpace:"nowrap"}}>{fmtDate(tx.date)}</td>
       <td className="tx-desc-cell">{tx.description}</td>
       <td>{tx.source&&<span className={`src-chip ${srcClass}`}>{tx.source}</span>}</td>
       <td className={`tx-amt-cell ${isIncome?"g":"r"}`}>{isIncome?"+":"-"}{fmt(Math.abs(tx.amount),true)}</td>
@@ -566,7 +573,7 @@ function Transactions({filteredTxs,source,structure,onAdd,onEdit,onUpdateCategor
                   const availCats=isIncome?structure.ingresos.flatMap(g=>g.items):structure.gastos.flatMap(f=>f.grupos.flatMap(g=>g.items));
                   return(
                     <tr key={tx.id}>
-                      <td style={{color:"var(--muted)",fontSize:12,whiteSpace:"nowrap"}}>{tx.date}</td>
+                      <td style={{color:"var(--muted)",fontSize:12,whiteSpace:"nowrap"}}>{fmtDate(tx.date)}</td>
                       <td className="tx-desc-cell" style={{maxWidth:220}} title={tx.description}>{tx.description}</td>
                       <td>{tx.source&&<span className={`src-chip ${srcCls}`}>{tx.source}</span>}</td>
                       <td>
@@ -825,13 +832,22 @@ function Import({onImport,showToast,batches,onDeleteBatch}){
         const ws=wb.Sheets[wb.SheetNames[0]];
         // Read as raw strings to handle Spanish number format
         const rows=utils.sheet_to_json(ws,{header:1,raw:false});
-        raw=rows.slice(1).map(r=>{
+        // Find the header row (contains 'Fecha operación' or 'Concepto')
+        let dataStart = 1;
+        for (let i = 0; i < Math.min(rows.length, 15); i++) {
+          const row = rows[i];
+          if (row && row.some(cell => cell && String(cell).includes('Concepto'))) {
+            dataStart = i + 1; // data starts after header
+            break;
+          }
+        }
+        raw=rows.slice(dataStart).map(r=>{
           if(!r||r.length<4) return null;
           // Col A=fecha operación, B=fecha valor (skip), C=concepto, D=importe, E=saldo (skip)
           const date=parseExcelDate(r[0]);
           const description=String(r[2]||"").trim();
           const amount=parseSpanishNumber(r[3]); // Column D = Importe
-          if(isNaN(amount)||!description) return null;
+          if(isNaN(amount)||!description||!r[0]) return null;
           return{date,description,amount};
         }).filter(Boolean);
       }
@@ -877,7 +893,7 @@ function Import({onImport,showToast,batches,onDeleteBatch}){
               <tbody>
                 {preview.slice(0,30).map((t,i)=>(
                   <tr key={i}>
-                    <td style={{color:"var(--muted)",fontSize:12,whiteSpace:"nowrap"}}>{t.date}</td>
+                    <td style={{color:"var(--muted)",fontSize:12,whiteSpace:"nowrap"}}>{fmtDate(t.date)}</td>
                     <td style={{maxWidth:300,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.description}</td>
                     <td className={`tx-amt-cell ${t.amount>=0?"g":"r"}`}>{t.amount>=0?"+":"-"}{fmt(Math.abs(t.amount),true)}</td>
                   </tr>
