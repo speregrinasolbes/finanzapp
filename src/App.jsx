@@ -32,7 +32,7 @@ const DEFAULT_STRUCTURE = {
         {id:"ef-i17",label:"Otros Gastos Efectivo"},
       ]},
     ]},
-    { id: "san", fuente: "Santander", label: "Gastos Santander", grupos: [
+    { id: "san1", fuente: "Santander 1", label: "Gastos Santander 1", grupos: [
       { id: "san-g1", label: "Alimentación Supermercado", items: [{id:"san-i1",label:"Supermercados"},{id:"san-i2",label:"Pescadería"},{id:"san-i3",label:"Bofrost"}] },
       { id: "san-g2", label: "Seguros", items: [{id:"san-i4",label:"Seguro de Decesos"},{id:"san-i5",label:"Seguro Móviles"}] },
       { id: "san-g3", label: "Vehículos", items: [{id:"san-i6",label:"Combustible"},{id:"san-i7",label:"Revisión / Taller"},{id:"san-i8",label:"ITV"},{id:"san-i9",label:"Peaje Autopista"}] },
@@ -40,6 +40,9 @@ const DEFAULT_STRUCTURE = {
       { id: "san-g5", label: "Suministros", items: [{id:"san-i15",label:"Gas Natural"},{id:"san-i16",label:"Zona Azul (e-Park)"}] },
       { id: "san-g6", label: "Hogar y Comunidad", items: [{id:"san-i17",label:"Alarma (Prosegur)"},{id:"san-i18",label:"Gimnasio"},{id:"san-i19",label:"Peluquería y Estética"},{id:"san-i20",label:"Comunidad Santander"}] },
       { id: "san-g7", label: "Otros Santander", items: [{id:"san-i21",label:"Antivirus"},{id:"san-i22",label:"Otros Gastos Santander"}] },
+    ]},
+    { id: "san2", fuente: "Santander 2", label: "Gastos Santander 2", grupos: [
+      { id: "san2-g1", label: "Gastos Santander 2", items: [{id:"san2-i1",label:"Otros Gastos Santander 2"}] },
     ]},
     { id: "bbva", fuente: "BBVA", label: "Gastos BBVA", grupos: [
       { id: "bbva-g1", label: "Vivienda", items: [{id:"bbva-i1",label:"Préstamo de la Casa"},{id:"bbva-i2",label:"Seguro de la Casa"}] },
@@ -56,7 +59,8 @@ const DEFAULT_STRUCTURE = {
   ],
 };
 
-const SOURCES = ["Efectivo", "Santander", "BBVA"];
+const SOURCES = ["Efectivo", "Santander 1", "Santander 2", "BBVA"];
+const IMPORT_SOURCES = ["Efectivo", "Santander 1", "Santander 2", "BBVA"]; // sources that accept file imports
 const MONTHS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const MONTHS_FULL = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
@@ -152,7 +156,7 @@ const CSS = `
   --blue:#1d4ed8;--blue-bg:#dbeafe;
   --amber:#92400e;--amber-bg:#fef3c7;
   --accent:#1d4ed8;--accent-light:#dbeafe;
-  --san:#0369a1;--san-bg:#e0f2fe;
+  --san:#0369a1;--san-bg:#e0f2fe;--san2:#3730a3;--san2-bg:#e0e7ff;
   --bbva:#065f46;--bbva-bg:#d1fae5;
   --ef:#92400e;--ef-bg:#fef3c7;
   --r:10px;--ff:'Figtree',sans-serif;--fd:'Playfair Display',serif;
@@ -217,7 +221,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff);font-size:14px
 .no-cat{background:var(--s2);border:1px dashed var(--border2);color:var(--muted);border-radius:20px;padding:2px 8px;font-size:11px;cursor:pointer;outline:none;font-family:var(--ff)}
 
 .src-chip{display:inline-block;font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;white-space:nowrap}
-.src-ef{background:var(--ef-bg);color:var(--ef)}.src-san{background:var(--san-bg);color:var(--san)}.src-bbva{background:var(--bbva-bg);color:var(--bbva)}
+.src-ef{background:var(--ef-bg);color:var(--ef)}.src-san{background:var(--san-bg);color:var(--san)}.src-san2{background:#e0e7ff;color:#3730a3}.src-bbva{background:var(--bbva-bg);color:var(--bbva)}.src-ahorro{background:#fce7f3;color:#9d174d}
 .ai-chip{display:inline-block;font-size:10px;padding:2px 6px;border-radius:20px;background:var(--blue-bg);color:var(--blue);font-weight:500}
 .rule-chip{display:inline-block;font-size:10px;padding:2px 6px;border-radius:20px;background:var(--green-bg);color:var(--green);font-weight:500}
 .batch-chip{display:inline-block;font-size:10px;padding:2px 7px;border-radius:20px;background:var(--amber-bg);color:var(--amber);font-weight:500}
@@ -332,6 +336,13 @@ export default function App() {
   const [structure,setStructure]=useState(()=>LS.get("fin_structure",DEFAULT_STRUCTURE));
   const [rules,setRules]=useState(()=>LS.get("fin_rules",[]));
   const [batches,setBatches]=useState(()=>LS.get("fin_batches",[])); // [{id,label,date,count}]
+  // Saldos iniciales por fuente {source: amount}
+  const [saldosIniciales,setSaldosIniciales]=useState(()=>LS.get("fin_saldos",{}));
+  // Ahorro: pensiones (valor actual) y fondo (historial)
+  const [ahorro,setAhorro]=useState(()=>LS.get("fin_ahorro",{
+    pensionMar: 0, pensionSalva: 0,
+    fondo: [] // [{id, date, valor, nota}]
+  }));
   const [selMonth,setSelMonth]=useState(currentYM);
   // Shared period filter (used by Dashboard, Movimientos, Presupuestos, Ppto vs Real)
   const [periodMode,setPeriodMode]=useState("month"); // month | year | range
@@ -349,6 +360,8 @@ export default function App() {
   useEffect(()=>{LS.set("fin_structure",structure);},[structure]);
   useEffect(()=>{LS.set("fin_rules",rules);},[rules]);
   useEffect(()=>{LS.set("fin_batches",batches);},[batches]);
+  useEffect(()=>{LS.set("fin_saldos",saldosIniciales);},[saldosIniciales]);
+  useEffect(()=>{LS.set("fin_ahorro",ahorro);},[ahorro]);
 
   const showToast=(msg,icon="✓")=>{setToast({msg,icon});setTimeout(()=>setToast(null),4000);};
 
@@ -501,10 +514,11 @@ export default function App() {
         </nav>
         <main className="main">
           {classifying&&<div className="classifying-banner"><span className="spin">⟳</span><span>Clasificando con IA... {classifyProgress}%</span><div style={{flex:1}}><div className="progress-bar"><div className="progress-fill" style={{width:`${classifyProgress}%`,background:"var(--blue)"}}/></div></div></div>}
-          {tab==="dashboard"&&<Dashboard filteredTxs={filteredTxs} income={income} expense={expense} source={source} selMonth={selMonth} periodLabel={periodLabel} transactions={transactions} setTab={setTab}/>}
+          {tab==="dashboard"&&<Dashboard filteredTxs={filteredTxs} income={income} expense={expense} source={source} selMonth={selMonth} periodLabel={periodLabel} transactions={transactions} saldosIniciales={saldosIniciales} ahorro={ahorro} activeMonths={activeMonths} setTab={setTab}/>}
           {tab==="transactions"&&<Transactions filteredTxs={filteredTxs} source={source} periodLabel={periodLabel} structure={structure} onAdd={()=>setModal("add")} onEdit={tx=>{setEditTx(tx);setModal("tx");}} onUpdateCategory={updateTxCategory}/>}
           {tab==="comparison"&&<Comparison transactions={transactions} budgets={budgets} selMonth={selMonth} periodMode={periodMode} activeMonths={activeMonths} periodLabel={periodLabel} source={source} structure={structure}/>}
           {tab==="budgets"&&<Budgets budgets={budgets} setBudgets={setBudgets} selMonth={selMonth} periodMode={periodMode} activeMonths={activeMonths} periodLabel={periodLabel} monthTxs={transactions.filter(t=>activeMonths.includes(t.date?.slice(0,7)))} showToast={showToast} structure={structure}/>}
+          {tab==="ahorro"&&<Ahorro ahorro={ahorro} setAhorro={setAhorro} saldosIniciales={saldosIniciales} setSaldosIniciales={setSaldosIniciales} transactions={transactions} activeMonths={activeMonths} showToast={showToast}/>}
           {tab==="rules"&&<Rules rules={rules} setRules={setRules} structure={structure} showToast={showToast}/>}
           {tab==="structure"&&<StructureEditor structure={structure} setStructure={setStructure} showToast={showToast}/>}
           {tab==="import"&&<Import onImport={importTxs} showToast={showToast} batches={batches} onDeleteBatch={deleteBatch}/>}
@@ -518,18 +532,18 @@ export default function App() {
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
-function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,transactions,setTab}){
+function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,transactions,saldosIniciales,ahorro,activeMonths,setTab}){
   const balance=income-expense;
   const [y,m]=selMonth.split("-");
   const months6=Array.from({length:6},(_,i)=>{const d=new Date(parseInt(y),parseInt(m)-1-(5-i),1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;});
   const trendMax=Math.max(1,...months6.flatMap(mo=>{const mT=transactions.filter(t=>t.date?.startsWith(mo)&&(source==="Todos"||t.source===source));return[mT.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0),mT.filter(t=>t.amount<0).reduce((s,t)=>s+Math.abs(t.amount),0)];}));
-  const srcBreakdown=SOURCES.map(s=>({name:s,exp:transactions.filter(t=>t.date?.startsWith(selMonth)&&t.source===s&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0)}));
+  const srcBreakdown=IMPORT_SOURCES.map(s=>({name:s,exp:transactions.filter(t=>activeMonths.includes(t.date?.slice(0,7))&&t.source===s&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0),inc:transactions.filter(t=>activeMonths.includes(t.date?.slice(0,7))&&t.source===s&&t.amount>0).reduce((a,t)=>a+t.amount,0)}));
   const maxSrc=Math.max(1,...srcBreakdown.map(s=>s.exp));
   const byCat={};filteredTxs.filter(t=>t.amount<0&&t.category).forEach(t=>{byCat[t.category]=(byCat[t.category]||0)+Math.abs(t.amount);});
   const topCats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const totalCatExp=topCats.reduce((s,[,v])=>s+v,0);
-  const srcColor=(s)=>s==="Efectivo"?"var(--ef)":s==="Santander"?"var(--san)":"var(--bbva)";
-  const srcBg=(s)=>s==="Efectivo"?"var(--ef-bg)":s==="Santander"?"var(--san-bg)":"var(--bbva-bg)";
+  const srcColor=(s)=>({"Efectivo":"var(--ef)","Santander 1":"var(--san)","Santander 2":"var(--san2)","BBVA":"var(--bbva)","Ahorro":"#9d174d"})[s]||"var(--muted)";
+  const srcBg=(s)=>({"Efectivo":"var(--ef-bg)","Santander 1":"var(--san-bg)","Santander 2":"var(--san2-bg)","BBVA":"var(--bbva-bg)","Ahorro":"#fce7f3"})[s]||"var(--s2)";
   return(
     <div>
       <div style={{marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
@@ -552,14 +566,43 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
           <div style={{display:"flex",gap:14,marginTop:10}}>{[["var(--green)","Ingresos"],["var(--red)","Gastos"]].map(([c,l])=><span key={l} style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"var(--muted)"}}><span style={{width:10,height:10,borderRadius:3,background:c,display:"inline-block"}}/>{l}</span>)}</div>
         </div>
         <div className="card">
-          <div className="card-title">Gastos por cuenta</div>
-          {srcBreakdown.map((s,i)=>(<div key={s.name} style={{marginBottom:i<srcBreakdown.length-1?14:0}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5,alignItems:"center"}}>
-              <span style={{fontSize:13,fontWeight:600,color:srcColor(s.name),background:srcBg(s.name),padding:"2px 9px",borderRadius:20}}>{s.name}</span>
-              <span style={{color:"var(--red)",fontWeight:600,fontSize:13}}>{fmt(s.exp)}</span>
+          <div className="card-title">Disponibilidad por cuenta</div>
+          {IMPORT_SOURCES.map((s,i)=>{
+            const saldoInicial=saldosIniciales[s]||0;
+            const movInc=transactions.filter(t=>t.source===s&&t.amount>0).reduce((a,t)=>a+t.amount,0);
+            const movExp=transactions.filter(t=>t.source===s&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0);
+            const saldoActual=saldoInicial+movInc-movExp;
+            return(
+              <div key={s} style={{marginBottom:i<IMPORT_SOURCES.length-1?14:0}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,alignItems:"center"}}>
+                  <span style={{fontSize:13,fontWeight:600,color:srcColor(s),background:srcBg(s),padding:"2px 9px",borderRadius:20}}>{s}</span>
+                  <span style={{fontWeight:700,fontSize:14,color:saldoActual>=0?"var(--green)":"var(--red)"}}>{fmt(saldoActual)}</span>
+                </div>
+                {saldosIniciales[s]!==undefined&&<div style={{fontSize:11,color:"var(--muted)",display:"flex",gap:12}}>
+                  <span>Inicial: {fmt(saldoInicial)}</span>
+                  <span style={{color:"var(--green)"}}>+{fmt(movInc)}</span>
+                  <span style={{color:"var(--red)"}}>-{fmt(movExp)}</span>
+                </div>}
+              </div>
+            );
+          })}
+          {ahorro&&<div style={{marginTop:14,paddingTop:12,borderTop:"1px solid var(--border)"}}>
+            <div style={{fontSize:11,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Ahorro</div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+              <span>Plan Pensiones Mar</span><span style={{fontWeight:600}}>{fmt(ahorro.pensionMar||0)}</span>
             </div>
-            <div className="bbar"><div className="bbar-fill" style={{width:`${Math.round(s.exp/maxSrc*100)}%`,background:srcColor(s.name)}}/></div>
-          </div>))}
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+              <span>Plan Pensiones Salva</span><span style={{fontWeight:600}}>{fmt(ahorro.pensionSalva||0)}</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6}}>
+              <span>Fondo Inversión Salva</span>
+              <span style={{fontWeight:600}}>{ahorro.fondo?.length>0?fmt(ahorro.fondo[0].valor):fmt(0)}</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,borderTop:"1px solid var(--border)",paddingTop:6}}>
+              <span>Total Ahorro</span>
+              <span style={{color:"var(--green)"}}>{fmt((ahorro.pensionMar||0)+(ahorro.pensionSalva||0)+(ahorro.fondo?.length>0?ahorro.fondo[0].valor:0))}</span>
+            </div>
+          </div>}
         </div>
       </div>
       {topCats.length>0&&<div className="card" style={{marginBottom:14}}>
@@ -579,7 +622,7 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
 
 function MiniTxRow({tx}){
   const isIncome=tx.amount>0;
-  const srcClass=tx.source==="Efectivo"?"src-ef":tx.source==="Santander"?"src-san":"src-bbva";
+  const srcClass=({"Efectivo":"src-ef","Santander 1":"src-san","Santander 2":"src-san2","BBVA":"src-bbva","Ahorro":"src-ahorro"})[tx.source]||"src-ef";
   return(
     <tr>
       <td style={{color:"var(--muted)",fontSize:12,whiteSpace:"nowrap"}}>{fmtDate(tx.date)}</td>
@@ -602,7 +645,7 @@ function Transactions({filteredTxs,source,periodLabel,structure,onAdd,onEdit,onU
     .filter(t=>!search||t.description?.toLowerCase().includes(search.toLowerCase())||t.category?.toLowerCase().includes(search.toLowerCase()))
     .sort((a,b)=>sortBy==="date"?b.date?.localeCompare(a.date):Math.abs(b.amount)-Math.abs(a.amount));
 
-  const srcClass=(s)=>s==="Efectivo"?"src-ef":s==="Santander"?"src-san":"src-bbva";
+  const srcClass=(s)=>({"Efectivo":"src-ef","Santander 1":"src-san","Santander 2":"src-san2","BBVA":"src-bbva","Ahorro":"src-ahorro"})[s]||"src-ef";
 
   return(
     <div>
@@ -627,7 +670,7 @@ function Transactions({filteredTxs,source,periodLabel,structure,onAdd,onEdit,onU
               <tbody>
                 {shown.map(tx=>{
                   const isIncome=tx.amount>0;
-                  const srcCls=tx.source==="Efectivo"?"src-ef":tx.source==="Santander"?"src-san":"src-bbva";
+                  const srcCls=({"Efectivo":"src-ef","Santander 1":"src-san","Santander 2":"src-san2","BBVA":"src-bbva","Ahorro":"src-ahorro"})[tx.source]||"src-ef";
                   const availCats=[...structure.gastos.flatMap(f=>f.grupos.flatMap(g=>g.items)),...structure.ingresos.flatMap(g=>g.items)];
                   return(
                     <tr key={tx.id}>
@@ -691,7 +734,6 @@ function Comparison({transactions,budgets,selMonth,periodMode,activeMonths,perio
   };
 
   const fuentesToShow=viewSrc==="Todos"?structure.gastos:structure.gastos.filter(f=>f.fuente===viewSrc);
-  const periodLabel=periodMode==="month"?`${MONTHS_FULL[parseInt(m)-1]} ${y}`:periodMode==="year"?`Año ${y}`:`${rangeFrom} → ${rangeTo}`;
 
 
   return(
@@ -715,7 +757,7 @@ function Comparison({transactions,budgets,selMonth,periodMode,activeMonths,perio
                 const fItems=fuente.grupos.flatMap(g=>g.items.map(i=>i.label));
                 const fReal=fItems.reduce((s,i)=>s+realForCat(i),0);
                 const fBudget=fItems.reduce((s,i)=>{const b=getBudget(i);return b!==null?s+b:s;},0);
-                const fColor=fuente.fuente==="Efectivo"?"var(--ef)":fuente.fuente==="Santander"?"var(--san)":"var(--bbva)";
+                const fColor=({"Efectivo":"var(--ef)","Santander 1":"var(--san)","Santander 2":"var(--san2)","BBVA":"var(--bbva)"})[fuente.fuente]||"var(--muted)";
                 return(<>
                   <tr className="frow" key={fuente.id}><td colSpan={5} style={{color:fColor}}>{fuente.label}</td></tr>
                   {fuente.grupos.map(g=>{
@@ -790,7 +832,7 @@ function Budgets({budgets,setBudgets,selMonth,periodMode,activeMonths,periodLabe
   const getVal=(label)=>{const e=local[label];if(!e)return"";const key=mode==="annual"?"*":selMonth;return e[key]??e["*"]??"";}
   const save=()=>{setBudgets(local);showToast("Presupuestos guardados");};
   const renderSection=(title,grupos,color)=>{const isOpen=open===title;return(<div key={title}><div className="acc-hdr" onClick={()=>setOpen(isOpen?null:title)}><span style={{fontWeight:600,fontSize:13,color}}>{title}</span><span style={{color:"var(--hint)",fontSize:11}}>{isOpen?"▲":"▼"}</span></div>{isOpen&&<div className="acc-body">{grupos.map(g=>(<div key={g.id}><div style={{padding:"6px 14px",fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".07em",background:"var(--s2)"}}>{g.label}</div>{g.items.map(item=>{const real=monthTxs.filter(t=>t.category===item.label).reduce((s,t)=>s+Math.abs(t.amount),0);return(<div key={item.id} style={{display:"flex",alignItems:"center",gap:9,padding:"7px 14px 7px 24px",borderBottom:"1px solid var(--border)"}}><span style={{flex:1,fontSize:13,color:"var(--text)",fontWeight:500}}>{item.label}</span>{real>0&&<span style={{fontSize:11,color:"var(--red)",fontWeight:600}}>Real: {fmt(real)}</span>}<input type="number" min="0" step="10" value={getVal(item.label)} onChange={e=>setVal(item.label,e.target.value)} placeholder="—" style={{width:100,background:"#fff",border:"1px solid var(--border)",color:"var(--text)",borderRadius:7,padding:"5px 9px",fontSize:13,fontFamily:"var(--ff)",outline:"none",textAlign:"right"}}/><span style={{fontSize:11,color:"var(--hint)",width:12}}>€</span></div>);})}</div>))}</div>}</div>);};
-  return(<div><div className="sh"><div className="sh-title">Presupuestos</div><div className="fg"><div className="period-tabs"><button className={`period-tab${mode==="monthly"?" active":""}`} onClick={()=>setMode("monthly")}>Este mes</button><button className={`period-tab${mode==="annual"?" active":""}`} onClick={()=>setMode("annual")}>Todos los meses</button></div><button className="btn btn-p" onClick={save}>💾 Guardar</button></div></div><div style={{fontSize:12,color:"var(--muted)",marginBottom:13,padding:"8px 12px",background:"var(--accent-light)",borderRadius:8,border:"1px solid #93c5fd"}}>{mode==="annual"?"Los valores anuales se aplican a todos los meses. Puedes sobreescribirlos mes a mes.":"Presupuesto específico para "+MONTHS_FULL[parseInt(selMonth.split("-")[1])-1]+" "+selMonth.split("-")[0]+"."}</div>{structure.gastos.map(f=>renderSection(f.label,f.grupos,f.fuente==="Efectivo"?"var(--ef)":f.fuente==="Santander"?"var(--san)":"var(--bbva)"))}{renderSection("Ingresos",structure.ingresos,"var(--green)")}<div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}><button className="btn btn-p" onClick={save}>💾 Guardar presupuestos</button></div></div>);
+  return(<div><div className="sh"><div className="sh-title">Presupuestos</div><div className="fg"><div className="period-tabs"><button className={`period-tab${mode==="monthly"?" active":""}`} onClick={()=>setMode("monthly")}>Este mes</button><button className={`period-tab${mode==="annual"?" active":""}`} onClick={()=>setMode("annual")}>Todos los meses</button></div><button className="btn btn-p" onClick={save}>💾 Guardar</button></div></div><div style={{fontSize:12,color:"var(--muted)",marginBottom:13,padding:"8px 12px",background:"var(--accent-light)",borderRadius:8,border:"1px solid #93c5fd"}}>{mode==="annual"?"Los valores anuales se aplican a todos los meses. Puedes sobreescribirlos mes a mes.":"Presupuesto específico para "+MONTHS_FULL[parseInt(selMonth.split("-")[1])-1]+" "+selMonth.split("-")[0]+"."}</div>{structure.gastos.map(f=>renderSection(f.label,f.grupos,({"Efectivo":"var(--ef)","Santander 1":"var(--san)","Santander 2":"var(--san2)","BBVA":"var(--bbva)"})[f.fuente]||"var(--muted)"))}{renderSection("Ingresos",structure.ingresos,"var(--green)")}<div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}><button className="btn btn-p" onClick={save}>💾 Guardar presupuestos</button></div></div>);
 }
 
 // ── CRITERIOS ─────────────────────────────────────────────────────────────────
@@ -842,7 +884,7 @@ function StructureEditor({structure,setStructure,showToast}){
   const addGroup=(bid,label,isIng=false)=>{if(!label.trim())return;const next=JSON.parse(JSON.stringify(structure));if(isIng)next.ingresos.push({id:uid(),label:label.trim(),items:[]});else{const b=next.gastos.find(f=>f.id===bid);if(b)b.grupos.push({id:uid(),label:label.trim(),items:[]});}save(next);};
   const IE=({id,val,path})=>{if(editingId===id)return<input className="inline-input" value={editVal} autoFocus onChange={e=>setEditVal(e.target.value)} onBlur={()=>renameItem(path,editVal)} onKeyDown={e=>{if(e.key==="Enter")renameItem(path,editVal);if(e.key==="Escape")setEditingId(null);}}/>;return<span style={{fontSize:13,flex:1,cursor:"text",color:"var(--text)",fontWeight:500}} onDoubleClick={()=>{setEditingId(id);setEditVal(val);}}>{val} <span style={{fontSize:10,color:"var(--hint)"}}>✎</span></span>;};
   const AddLine=({placeholder,onAdd})=>{const[v,setV]=useState("");return<div style={{display:"flex",gap:5,padding:"6px 10px"}}><input value={v} onChange={e=>setV(e.target.value)} placeholder={placeholder} onKeyDown={e=>{if(e.key==="Enter"&&v.trim()){onAdd(v.trim());setV("");}}} style={{flex:1,background:"var(--s2)",border:"1px dashed var(--border2)",color:"var(--text)",borderRadius:6,padding:"4px 9px",fontSize:12,fontFamily:"var(--ff)",outline:"none"}}/><button className="btn btn-g btn-sm" onClick={()=>{if(v.trim()){onAdd(v.trim());setV("");}}}>+ Añadir</button></div>;};
-  const renderBloque=(fuente)=>{const isOpen=open===fuente.id;const fColor=fuente.fuente==="Efectivo"?"var(--ef)":fuente.fuente==="Santander"?"var(--san)":"var(--bbva)";const fBg=fuente.fuente==="Efectivo"?"var(--ef-bg)":fuente.fuente==="Santander"?"var(--san-bg)":"var(--bbva-bg)";return(<div key={fuente.id} style={{marginBottom:8}}><div className="acc-hdr"><div style={{flex:1,display:"flex",alignItems:"center",gap:8}} onClick={()=>setOpen(isOpen?null:fuente.id)}><IE id={`b-${fuente.id}`} val={fuente.label} path={{type:"bloque",bid:fuente.id}}/><span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:fBg,color:fColor,fontWeight:600}}>{fuente.fuente}</span></div><button className="btn btn-d btn-sm" style={{padding:"2px 7px",marginLeft:4}} onClick={()=>deleteItem({type:"bloque",bid:fuente.id})}>✕</button><span style={{color:"var(--hint)",fontSize:11,marginLeft:6}} onClick={()=>setOpen(isOpen?null:fuente.id)}>{isOpen?"▲":"▼"}</span></div>{isOpen&&<div className="acc-body">{fuente.grupos.map(g=>(<div key={g.id} style={{margin:"6px 10px",border:"1px solid var(--border)",borderRadius:8,overflow:"hidden"}}><div style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",background:"var(--s2)"}}><IE id={`g-${g.id}`} val={g.label} path={{type:"grupo",bid:fuente.id,gid:g.id}}/><button className="btn btn-d btn-sm" style={{padding:"2px 7px",fontSize:11}} onClick={()=>deleteItem({type:"grupo",bid:fuente.id,gid:g.id})}>✕</button></div>{g.items.map(item=>(<div key={item.id} className="editable-row" style={{paddingLeft:22}}><IE id={`i-${item.id}`} val={item.label} path={{type:"item",gid:g.id,iid:item.id}}/><button className="btn btn-d btn-sm" style={{padding:"1px 6px",fontSize:11,opacity:.6}} onClick={()=>deleteItem({type:"item",gid:g.id,iid:item.id})}>✕</button></div>))}<AddLine placeholder="+ Nueva partida (Enter para añadir)..." onAdd={label=>addToGroup(g.id,label)}/></div>))}<AddLine placeholder="+ Nuevo grupo..." onAdd={label=>addGroup(fuente.id,label)}/></div>}</div>);};
+  const renderBloque=(fuente)=>{const isOpen=open===fuente.id;const fColor=({"Efectivo":"var(--ef)","Santander 1":"var(--san)","Santander 2":"var(--san2)","BBVA":"var(--bbva)"})[fuente.fuente]||"var(--muted)";const fBg=({"Efectivo":"var(--ef-bg)","Santander 1":"var(--san-bg)","Santander 2":"var(--san2-bg)","BBVA":"var(--bbva-bg)"})[fuente.fuente]||"var(--s2)";return(<div key={fuente.id} style={{marginBottom:8}}><div className="acc-hdr"><div style={{flex:1,display:"flex",alignItems:"center",gap:8}} onClick={()=>setOpen(isOpen?null:fuente.id)}><IE id={`b-${fuente.id}`} val={fuente.label} path={{type:"bloque",bid:fuente.id}}/><span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:fBg,color:fColor,fontWeight:600}}>{fuente.fuente}</span></div><button className="btn btn-d btn-sm" style={{padding:"2px 7px",marginLeft:4}} onClick={()=>deleteItem({type:"bloque",bid:fuente.id})}>✕</button><span style={{color:"var(--hint)",fontSize:11,marginLeft:6}} onClick={()=>setOpen(isOpen?null:fuente.id)}>{isOpen?"▲":"▼"}</span></div>{isOpen&&<div className="acc-body">{fuente.grupos.map(g=>(<div key={g.id} style={{margin:"6px 10px",border:"1px solid var(--border)",borderRadius:8,overflow:"hidden"}}><div style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",background:"var(--s2)"}}><IE id={`g-${g.id}`} val={g.label} path={{type:"grupo",bid:fuente.id,gid:g.id}}/><button className="btn btn-d btn-sm" style={{padding:"2px 7px",fontSize:11}} onClick={()=>deleteItem({type:"grupo",bid:fuente.id,gid:g.id})}>✕</button></div>{g.items.map(item=>(<div key={item.id} className="editable-row" style={{paddingLeft:22}}><IE id={`i-${item.id}`} val={item.label} path={{type:"item",gid:g.id,iid:item.id}}/><button className="btn btn-d btn-sm" style={{padding:"1px 6px",fontSize:11,opacity:.6}} onClick={()=>deleteItem({type:"item",gid:g.id,iid:item.id})}>✕</button></div>))}<AddLine placeholder="+ Nueva partida (Enter para añadir)..." onAdd={label=>addToGroup(g.id,label)}/></div>))}<AddLine placeholder="+ Nuevo grupo..." onAdd={label=>addGroup(fuente.id,label)}/></div>}</div>);};
   return(<div><div className="sh"><div className="sh-title">Estructura de categorías</div><div style={{fontSize:12,color:"var(--muted)"}}>Doble clic para renombrar · ✕ para eliminar · Enter para añadir</div></div>{structure.gastos.map(f=>renderBloque(f))}<div style={{marginBottom:8}}><div className="acc-hdr" onClick={()=>setOpen(open==="ing"?null:"ing")}><span style={{fontWeight:600,fontSize:13,color:"var(--green)"}}>Ingresos</span><span style={{color:"var(--hint)",fontSize:11}}>{open==="ing"?"▲":"▼"}</span></div>{open==="ing"&&<div className="acc-body">{structure.ingresos.map(g=>(<div key={g.id} style={{margin:"6px 10px",border:"1px solid var(--border)",borderRadius:8,overflow:"hidden"}}><div style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",background:"var(--s2)"}}><IE id={`ig-${g.id}`} val={g.label} path={{type:"grupo",bid:"ing",gid:g.id}}/><button className="btn btn-d btn-sm" style={{padding:"2px 7px",fontSize:11}} onClick={()=>deleteItem({type:"grupo",bid:"ing",gid:g.id})}>✕</button></div>{g.items.map(item=>(<div key={item.id} className="editable-row" style={{paddingLeft:22}}><IE id={`ii-${item.id}`} val={item.label} path={{type:"item",gid:g.id,iid:item.id}}/><button className="btn btn-d btn-sm" style={{padding:"1px 6px",fontSize:11,opacity:.6}} onClick={()=>deleteItem({type:"item",gid:g.id,iid:item.id})}>✕</button></div>))}<AddLine placeholder="+ Nueva partida..." onAdd={label=>addToGroup(g.id,label)}/></div>))}<AddLine placeholder="+ Nuevo grupo de ingresos..." onAdd={label=>addGroup(null,label,true)}/></div>}</div><div className="card" style={{marginTop:14}}><div className="card-title">Añadir nuevo bloque de gastos</div><NewBloqueForm onAdd={(label,fuente)=>{const next=JSON.parse(JSON.stringify(structure));next.gastos.push({id:uid(),fuente,label,grupos:[]});save(next);}}/></div></div>);
 }
 
@@ -853,7 +895,7 @@ function Import({onImport,showToast,batches,onDeleteBatch}){
   const [dragging,setDragging]=useState(false);
   const [processing,setProcessing]=useState(false);
   const [preview,setPreview]=useState([]);
-  const [previewSrc,setPreviewSrc]=useState("Santander");
+  const [previewSrc,setPreviewSrc]=useState("Santander 1");
   const fileRef=useRef();
 
   const processFile=async(file)=>{
@@ -911,7 +953,7 @@ function Import({onImport,showToast,batches,onDeleteBatch}){
         <div className="card-title">Nuevo extracto</div>
         <div className="fg" style={{marginBottom:13}}>
           <span style={{fontSize:13,fontWeight:600}}>Cuenta:</span>
-          <div className="period-tabs">{SOURCES.map(s=><button key={s} className={`period-tab${previewSrc===s?" active":""}`} onClick={()=>setPreviewSrc(s)}>{s}</button>)}</div>
+          <div className="period-tabs">{IMPORT_SOURCES.map(s=><button key={s} className={`period-tab${previewSrc===s?" active":""}`} onClick={()=>setPreviewSrc(s)}>{s}</button>)}</div>
         </div>
         <div className={`drop-zone${dragging?" drag":""}`} onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0]);}} onClick={()=>fileRef.current?.click()}>
           <input ref={fileRef} type="file" accept=".csv,.pdf,.xlsx,.xls" style={{display:"none"}} onChange={e=>e.target.files[0]&&processFile(e.target.files[0])}/>
@@ -997,6 +1039,166 @@ function TxModal({tx,structure,onClose,onSave,onDelete}){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>{isEdit&&onDelete&&<button className="btn btn-d btn-sm" onClick={()=>{if(window.confirm("¿Eliminar este movimiento?"))onDelete();}}>🗑 Eliminar</button>}</div>
           <div className="fg"><button className="btn btn-o" onClick={onClose}>Cancelar</button><button className="btn btn-p" onClick={handleSave} disabled={!form.description||!form.amount}>{isEdit?"💾 Guardar":"+ Añadir"}</button></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ── AHORRO ────────────────────────────────────────────────────────────────────
+function Ahorro({ahorro,setAhorro,saldosIniciales,setSaldosIniciales,transactions,activeMonths,showToast}){
+  const [newFondoVal,setNewFondoVal]=useState("");
+  const [newFondoDate,setNewFondoDate]=useState(today());
+  const [newFondoNota,setNewFondoNota]=useState("");
+
+  const savePension=(key,val)=>{
+    setAhorro(p=>({...p,[key]:parseFloat(val)||0}));
+    showToast("Guardado");
+  };
+
+  const addFondoEntry=()=>{
+    if(!newFondoVal) return;
+    const entry={id:uid(),date:newFondoDate,valor:parseFloat(String(newFondoVal).replace(",",".")),nota:newFondoNota};
+    // Insert sorted by date descending
+    setAhorro(p=>({...p,fondo:[entry,...(p.fondo||[])].sort((a,b)=>b.date.localeCompare(a.date))}));
+    setNewFondoVal("");setNewFondoNota("");
+    showToast("Valoración añadida");
+  };
+
+  const deleteFondoEntry=(id)=>{
+    setAhorro(p=>({...p,fondo:(p.fondo||[]).filter(e=>e.id!==id)}));
+    showToast("Eliminada","🗑");
+  };
+
+  const totalAhorro=(ahorro.pensionMar||0)+(ahorro.pensionSalva||0)+(ahorro.fondo?.length>0?ahorro.fondo[0].valor:0);
+
+  return(
+    <div>
+      <div className="sh"><div className="sh-title">Ahorro y disponibilidad</div></div>
+
+      {/* Saldos iniciales */}
+      <div className="card" style={{marginBottom:14}}>
+        <div className="card-title">Saldos iniciales por cuenta</div>
+        <div style={{fontSize:12,color:"var(--muted)",marginBottom:14,padding:"8px 12px",background:"var(--accent-light)",borderRadius:8,border:"1px solid #93c5fd"}}>
+          Introduce el saldo inicial de cada cuenta. El saldo actual se calcula automáticamente sumando los movimientos importados.
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
+          {IMPORT_SOURCES.map(s=>{
+            const saldoInicial=saldosIniciales[s]||0;
+            const movInc=transactions.filter(t=>t.source===s&&t.amount>0).reduce((a,t)=>a+t.amount,0);
+            const movExp=transactions.filter(t=>t.source===s&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0);
+            const saldoActual=saldoInicial+movInc-movExp;
+            return(
+              <div key={s} style={{background:"var(--s2)",borderRadius:9,padding:"12px 14px",border:"1px solid var(--border)"}}>
+                <div style={{fontSize:12,fontWeight:700,marginBottom:8,color:"var(--text)"}}>{s}</div>
+                <div className="field" style={{marginBottom:8}}>
+                  <label>Saldo inicial (€)</label>
+                  <input type="number" step="0.01"
+                    defaultValue={saldosIniciales[s]||""}
+                    placeholder="0,00"
+                    onBlur={e=>{
+                      const v=parseFloat(e.target.value)||0;
+                      setSaldosIniciales(p=>({...p,[s]:v}));
+                      showToast(`Saldo inicial ${s} guardado`);
+                    }}
+                    style={{background:"#fff",border:"1px solid var(--border)",color:"var(--text)",borderRadius:7,padding:"6px 9px",fontSize:13,fontFamily:"var(--ff)",outline:"none",textAlign:"right"}}
+                  />
+                </div>
+                <div style={{fontSize:11,color:"var(--muted)",display:"flex",flexDirection:"column",gap:2}}>
+                  <div style={{display:"flex",justifyContent:"space-between"}}><span>Ingresos:</span><span style={{color:"var(--green)",fontWeight:600}}>+{fmt(movInc)}</span></div>
+                  <div style={{display:"flex",justifyContent:"space-between"}}><span>Gastos:</span><span style={{color:"var(--red)",fontWeight:600}}>-{fmt(movExp)}</span></div>
+                  <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,borderTop:"1px solid var(--border)",paddingTop:4,marginTop:2}}>
+                    <span>Saldo actual:</span>
+                    <span style={{color:saldoActual>=0?"var(--green)":"var(--red)",fontSize:13}}>{fmt(saldoActual)}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Planes de pensiones */}
+      <div className="card" style={{marginBottom:14}}>
+        <div className="card-title">Planes de pensiones</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          {[["pensionMar","Plan de Pensiones Mar"],["pensionSalva","Plan de Pensiones Salva"]].map(([key,label])=>(
+            <div key={key} style={{background:"var(--s2)",borderRadius:9,padding:"12px 14px",border:"1px solid var(--border)"}}>
+              <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>{label}</div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <input type="number" step="0.01"
+                  defaultValue={ahorro[key]||""}
+                  placeholder="Valor actual..."
+                  onBlur={e=>savePension(key,e.target.value)}
+                  style={{flex:1,background:"#fff",border:"1px solid var(--border)",color:"var(--text)",borderRadius:7,padding:"8px 10px",fontSize:14,fontFamily:"var(--ff)",outline:"none",textAlign:"right",fontWeight:600}}
+                />
+                <span style={{fontSize:12,color:"var(--muted)"}}>€</span>
+              </div>
+              <div style={{fontSize:11,color:"var(--muted)",marginTop:6}}>Actualiza cuando recibas el extracto del plan</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Fondo de inversión */}
+      <div className="card">
+        <div className="sh">
+          <div className="card-title" style={{marginBottom:0}}>Fondo de Inversión Salva</div>
+          {ahorro.fondo?.length>0&&<div style={{fontFamily:"var(--fd)",fontSize:18,color:"var(--green)",fontWeight:700}}>{fmt(ahorro.fondo[0].valor)}</div>}
+        </div>
+
+        {/* Nueva valoración */}
+        <div style={{background:"var(--s2)",borderRadius:9,padding:"12px 14px",border:"1px solid var(--border)",marginBottom:14}}>
+          <div style={{fontSize:12,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em",marginBottom:10}}>Añadir valoración</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 2fr auto",gap:8,alignItems:"end"}}>
+            <div className="field">
+              <label>Fecha</label>
+              <input type="date" value={newFondoDate} onChange={e=>setNewFondoDate(e.target.value)}/>
+            </div>
+            <div className="field">
+              <label>Valor (€)</label>
+              <input type="number" step="0.01" value={newFondoVal} onChange={e=>setNewFondoVal(e.target.value)} placeholder="0,00" onKeyDown={e=>e.key==="Enter"&&addFondoEntry()}/>
+            </div>
+            <div className="field">
+              <label>Nota (opcional)</label>
+              <input value={newFondoNota} onChange={e=>setNewFondoNota(e.target.value)} placeholder="Ej: Extracto trimestral"/>
+            </div>
+            <button className="btn btn-p" onClick={addFondoEntry} disabled={!newFondoVal}>+ Añadir</button>
+          </div>
+        </div>
+
+        {/* Historial */}
+        {(!ahorro.fondo||ahorro.fondo.length===0)
+          ?<div className="empty">Sin valoraciones registradas aún</div>
+          :<div style={{overflowX:"auto"}}>
+            <table className="tx-table">
+              <thead><tr><th>Fecha</th><th>Nota</th><th className="right">Valor</th><th className="right">Variación</th><th></th></tr></thead>
+              <tbody>
+                {(ahorro.fondo||[]).map((e,i)=>{
+                  const prev=ahorro.fondo[i+1];
+                  const diff=prev?e.valor-prev.valor:null;
+                  return(
+                    <tr key={e.id}>
+                      <td style={{color:"var(--muted)",whiteSpace:"nowrap"}}>{fmtDate(e.date)}</td>
+                      <td style={{color:"var(--muted)",fontSize:12}}>{e.nota||"—"}</td>
+                      <td style={{textAlign:"right",fontFamily:"var(--fd)",fontWeight:600}}>{fmt(e.valor)}</td>
+                      <td style={{textAlign:"right",fontSize:12,color:diff===null?"var(--hint)":diff>=0?"var(--green)":"var(--red)",fontWeight:600}}>
+                        {diff===null?"—":diff>=0?"+"+fmt(diff):fmt(diff)}
+                      </td>
+                      <td><button className="btn btn-d btn-sm" style={{padding:"2px 7px"}} onClick={()=>deleteFondoEntry(e.id)}>✕</button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        }
+
+        {/* Resumen total ahorro */}
+        <div style={{marginTop:16,padding:"12px 14px",background:"var(--green-bg)",borderRadius:9,border:"1px solid #bbf7d0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontWeight:600,color:"var(--green)"}}>Total Ahorro consolidado</span>
+          <span style={{fontFamily:"var(--fd)",fontSize:20,fontWeight:700,color:"var(--green)"}}>{fmt(totalAhorro)}</span>
         </div>
       </div>
     </div>
