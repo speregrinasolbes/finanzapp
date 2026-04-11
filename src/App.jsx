@@ -65,6 +65,8 @@ const DEFAULT_STRUCTURE = {
 
 const SOURCES = ["Efectivo", "Efectivo Ahorro", "Santander", "Santander Ahorro", "BBVA", "BBVA Tarjeta Prepago"];
 const IMPORT_SOURCES = ["Efectivo", "Efectivo Ahorro", "Santander", "Santander Ahorro", "BBVA", "BBVA Tarjeta Prepago"]; // sources that accept file imports
+const BANK_SOURCES = ["Efectivo", "Santander", "Santander Ahorro", "BBVA", "BBVA Tarjeta Prepago"]; // main bank accounts for dashboard saldo
+const AHORRO_SOURCES = ["Efectivo Ahorro"]; // savings accounts
 const MONTHS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const MONTHS_FULL = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
@@ -633,7 +635,7 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
         <div className="card">
           <div className="card-title">Disponibilidad por cuenta</div>
           {(()=>{
-            const saldos=IMPORT_SOURCES.map(s=>{
+            const saldos=BANK_SOURCES.map(s=>{
               const saldoInicial=saldosIniciales[s]||0;
               const movInc=transactions.filter(t=>t.source===s&&t.amount>0).reduce((a,t)=>a+t.amount,0);
               const movExp=transactions.filter(t=>t.source===s&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0);
@@ -662,6 +664,13 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
           })()}
           {ahorro&&<div style={{marginTop:14,paddingTop:12,borderTop:"1px solid var(--border)"}}>
             <div style={{fontSize:11,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Ahorro</div>
+            {(()=>{
+              const efAhSaldo=(saldosIniciales["Efectivo Ahorro"]||0)+transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount>0).reduce((a,t)=>a+t.amount,0)-transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0);
+              return efAhSaldo!==0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+                <span style={{color:"#7e22ce",fontWeight:600}}>Efectivo Ahorro</span>
+                <span style={{fontWeight:600,color:efAhSaldo>=0?"var(--green)":"var(--red)"}}>{fmt(efAhSaldo)}</span>
+              </div>;
+            })()}
             <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
               <span>Plan Pensiones Mar</span><span style={{fontWeight:600}}>{fmt(ahorro.pensionMar||0)}</span>
             </div>
@@ -674,7 +683,7 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
             </div>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,borderTop:"1px solid var(--border)",paddingTop:6}}>
               <span>Total Ahorro</span>
-              <span style={{color:"var(--green)"}}>{fmt((ahorro.pensionMar||0)+(ahorro.pensionSalva||0)+(ahorro.fondo?.length>0?ahorro.fondo[0].valor:0))}</span>
+              <span style={{color:"var(--green)"}}>{fmt((saldosIniciales["Efectivo Ahorro"]||0)+transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount>0).reduce((a,t)=>a+t.amount,0)-transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0)+(ahorro.pensionMar||0)+(ahorro.pensionSalva||0)+(ahorro.fondo?.length>0?ahorro.fondo[0].valor:0))}</span>
             </div>
           </div>}
         </div>
@@ -860,8 +869,11 @@ function Comparison({transactions,budgets,selMonth,periodMode,activeMonths,perio
     <div>
       <div className="sh">
         <div className="sh-title">Presupuesto vs Real — {periodLabel}</div>
-        <div className="src-tabs" style={{background:"var(--s2)"}}>
-          {["Todos",...SOURCES].map(s=><button key={s} className={`src-tab dark${viewSrc===s?" active":""}`} onClick={()=>setViewSrc(s)}>{s}</button>)}
+        <div className="fg">
+          <button className="btn btn-o btn-sm" onClick={exportComparison}>📥 Exportar Excel</button>
+          <div className="src-tabs" style={{background:"var(--s2)"}}>
+            {["Todos",...SOURCES].map(s=><button key={s} className={`src-tab dark${viewSrc===s?" active":""}`} onClick={()=>setViewSrc(s)}>{s}</button>)}
+          </div>
         </div>
       </div>
 
