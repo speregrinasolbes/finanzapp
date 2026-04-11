@@ -74,7 +74,12 @@ const today = () => new Date().toISOString().slice(0, 10);
 const currentYM = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
 const fmt = (n) => {
   if (n===null||n===undefined||isNaN(n)) return "—";
-  return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+  const abs = Math.abs(Number(n));
+  const sign = n < 0 ? "-" : "";
+  // Manual formatting: thousands dot, decimal comma, € symbol
+  const parts = abs.toFixed(2).split(".");
+  const int = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return sign + int + "," + parts[1] + " €";
 };
 
 function getAllItems(structure) {
@@ -637,15 +642,29 @@ function MiniTxRow({tx}){
 function Transactions({filteredTxs,source,periodLabel,structure,onAdd,onEdit,onUpdateCategory}){
   const [search,setSearch]=useState("");
   const [filterType,setFilterType]=useState("all");
+  const [filterSrc,setFilterSrc]=useState("Todos");
   const [sortBy,setSortBy]=useState("date");
+  const [sortDir,setSortDir]=useState("desc"); // asc | desc
   const allItems=getAllItems(structure);
+
+  const toggleSort=(field)=>{
+    if(sortBy===field) setSortDir(d=>d==="desc"?"asc":"desc");
+    else{setSortBy(field);setSortDir("desc");}
+  };
 
   const shown=filteredTxs
     .filter(t=>filterType==="all"||(filterType==="income"?t.amount>0:t.amount<0))
+    .filter(t=>filterSrc==="Todos"||t.source===filterSrc)
     .filter(t=>!search||t.description?.toLowerCase().includes(search.toLowerCase())||t.category?.toLowerCase().includes(search.toLowerCase()))
-    .sort((a,b)=>sortBy==="date"?b.date?.localeCompare(a.date):Math.abs(b.amount)-Math.abs(a.amount));
+    .sort((a,b)=>{
+      let cmp=0;
+      if(sortBy==="date") cmp=a.date?.localeCompare(b.date)||0;
+      else cmp=Math.abs(a.amount)-Math.abs(b.amount);
+      return sortDir==="desc"?-cmp:cmp;
+    });
 
   const srcClass=(s)=>({"Efectivo":"src-ef","Santander 1":"src-san","Santander 2":"src-san2","BBVA":"src-bbva","Ahorro":"src-ahorro"})[s]||"src-ef";
+  const sortIcon=(field)=>sortBy===field?(sortDir==="desc"?"↓":"↑"):"↕";
 
   return(
     <div>
@@ -653,19 +672,23 @@ function Transactions({filteredTxs,source,periodLabel,structure,onAdd,onEdit,onU
         <div className="sh-title">Movimientos · {periodLabel}{source!=="Todos"?` · ${source}`:""}</div>
         <button className="btn btn-p btn-sm" onClick={onAdd}>+ Añadir manual</button>
       </div>
-      <div className="fg" style={{marginBottom:12}}>
+      <div className="fg" style={{marginBottom:8}}>
         <input className="sbar" placeholder="🔍 Buscar concepto o categoría..." value={search} onChange={e=>setSearch(e.target.value)}/>
         {[["all","Todos"],["income","Ingresos"],["expense","Gastos"]].map(([v,l])=><button key={v} className={`btn btn-sm ${filterType===v?"btn-p":"btn-o"}`} onClick={()=>setFilterType(v)}>{l}</button>)}
-        <select className="msel" value={sortBy} onChange={e=>setSortBy(e.target.value)}><option value="date">Por fecha</option><option value="amount">Por importe</option></select>
+      </div>
+      <div className="fg" style={{marginBottom:12}}>
+        <span style={{fontSize:12,color:"var(--muted)",fontWeight:600}}>Cuenta:</span>
+        {["Todos",...SOURCES].map(s=><button key={s} className={`btn btn-sm ${filterSrc===s?"btn-p":"btn-o"}`} style={{padding:"4px 10px",fontSize:11}} onClick={()=>setFilterSrc(s)}>{s}</button>)}
       </div>
       {shown.length===0?<div className="empty card">Sin resultados</div>:
         <div className="card" style={{padding:0,overflow:"hidden"}}>
           <div style={{overflowX:"auto"}}>
             <table className="tx-table">
               <thead><tr>
-                <th>Fecha</th><th>Concepto</th><th>Cuenta</th>
+                <th style={{cursor:"pointer"}} onClick={()=>toggleSort("date")}>Fecha {sortIcon("date")}</th>
+                <th>Concepto</th><th>Cuenta</th>
                 <th>Clasificación <span style={{fontWeight:400,fontSize:10}}>(clic para editar)</span></th>
-                <th className="right">Importe</th><th></th>
+                <th className="right" style={{cursor:"pointer"}} onClick={()=>toggleSort("amount")}>Importe {sortIcon("amount")}</th><th></th>
               </tr></thead>
               <tbody>
                 {shown.map(tx=>{
