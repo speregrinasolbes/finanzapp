@@ -89,6 +89,25 @@ const fmt = (n) => {
 };
 
 
+
+// ── Clasificación Fijos vs Variables ─────────────────────────────────────────
+const GASTOS_FIJOS = new Set([
+  "Préstamo de la Casa","Seguro de la Casa","Seguro Médico Sanitas",
+  "Seguro de Vida Hipoteca","Seguro del Vehículo","Seguro de Decesos","Seguro Móviles",
+  "Alarma (Prosegur)","Telefonía + TV","Gas Natural","Electricidad","Agua",
+  "Comunidad Santander","Plan de Pensiones","Impuestos Municipales","Sueldo Limpieza",
+  "Spotify","Netflix","iCloud","Dropbox","Antivirus","Zona Azul (e-Park)",
+  "Hip Hop / Danza","Clases de Inglés","Otras Clases","Clases / Academia",
+]);
+
+// Get all expense items classified as fixed or variable
+function getConsolidatedGastos(structure) {
+  const allItems = structure.gastos.flatMap(f => f.grupos.flatMap(g => g.items));
+  const fijos = allItems.filter(i => GASTOS_FIJOS.has(i.label));
+  const variables = allItems.filter(i => !GASTOS_FIJOS.has(i.label));
+  return { fijos, variables };
+}
+
 // ── Export to Excel ───────────────────────────────────────────────────────────
 async function exportToExcel(data, headers, filename) {
   const { utils, writeFile } = await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
@@ -602,11 +621,11 @@ export default function App() {
 function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,transactions,saldosIniciales,ahorro,activeMonths,setTab}){
   const balance=income-expense;
   const [y,m]=selMonth.split("-");
-  const months6=Array.from({length:6},(_,i)=>{const d=new Date(parseInt(y),parseInt(m)-1-(5-i),1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;});
-  const trendMax=Math.max(1,...months6.flatMap(mo=>{const mT=transactions.filter(t=>t.date?.startsWith(mo)&&(source==="Todos"||t.source===source));return[mT.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0),mT.filter(t=>t.amount<0).reduce((s,t)=>s+Math.abs(t.amount),0)];}));
+
   const srcBreakdown=IMPORT_SOURCES.map(s=>({name:s,exp:transactions.filter(t=>activeMonths.includes(t.date?.slice(0,7))&&t.source===s&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0),inc:transactions.filter(t=>activeMonths.includes(t.date?.slice(0,7))&&t.source===s&&t.amount>0).reduce((a,t)=>a+t.amount,0)}));
   const maxSrc=Math.max(1,...srcBreakdown.map(s=>s.exp));
-  const byCat={};filteredTxs.filter(t=>t.amount<0&&t.category).forEach(t=>{byCat[t.category]=(byCat[t.category]||0)+Math.abs(t.amount);});
+  const EXCLUDED_CATS=new Set(["Traspasos","Traspaso","No categorizable"]);
+  const byCat={};filteredTxs.filter(t=>t.amount<0&&t.category&&!EXCLUDED_CATS.has(t.category)).forEach(t=>{byCat[t.category]=(byCat[t.category]||0)+Math.abs(t.amount);});
   const topCats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const totalCatExp=topCats.reduce((s,[,v])=>s+v,0);
   const srcColor=(s)=>({"Efectivo":"var(--ef)","Efectivo Ahorro":"#7e22ce","Santander":"var(--san)","Santander Ahorro":"var(--san2)","BBVA":"var(--bbva)","BBVA Tarjeta Prepago":"#0f766e","Ahorro":"#9d174d"})[s]||"var(--muted)";
@@ -821,23 +840,22 @@ function Transactions({filteredTxs,source,periodLabel,structure,onAdd,onEdit,onS
 // ── COMPARATIVA ───────────────────────────────────────────────────────────────
 function Comparison({transactions,budgets,selMonth,periodMode,activeMonths,periodLabel,source,structure}){
   const exportComparison=async()=>{
-    const rows=[];
+    const {fijos,variables}=getConsolidatedGastos(structure);
+    const allIngresos=structure.ingresos.flatMap(g=>g.items);
     const getBudgetExp=(label)=>{
       if(periodMode==="month") return budgets[label]?.[selMonth]??budgets[label]?.["*"]??null;
       const m=budgets[label]?.["*"]??null; return m!==null?m*activeMonths.length:null;
     };
     const realExp=(label,isIncome=false)=>transactions.filter(t=>activeMonths.includes(t.date?.slice(0,7))&&t.category===label&&(isIncome?t.amount>0:t.amount<0)).reduce((s,t)=>s+Math.abs(t.amount),0);
-    structure.gastos.forEach(f=>{
-      rows.push([f.label,"","","",""]);
-      f.grupos.forEach(g=>{
-        rows.push(["",g.label,"","",""]);
-        g.items.forEach(item=>{
-          const b=getBudgetExp(item.label); const r=realExp(item.label);
-          rows.push(["","",item.label,b!=null?b:"",r>0?r:"",b!=null&&r>0?r-b:""]);
-        });
+    const rows=[];
+    [["Gastos Fijos",fijos,false],["Gastos Variables",variables,false],["Ingresos",allIngresos,true]].forEach(([bloque,items,isInc])=>{
+      rows.push([bloque,"","","","",""]);
+      items.forEach(item=>{
+        const b=getBudgetExp(item.label); const r=realExp(item.label,isInc);
+        if(b!==null||r>0) rows.push(["",item.label,b!=null?b:"",r>0?r:"",b!=null&&r>0?r-b:""]);
       });
     });
-    await exportToExcel(rows,["Bloque","Grupo","Partida","Presupuesto","Real","Diferencia"],`presupuesto_vs_real_${periodLabel.replace(/ /g,"_")}.xlsx`);
+    await exportToExcel(rows,["Bloque","Partida","Presupuesto","Real","Diferencia"],`presupuesto_vs_real_${periodLabel.replace(/ /g,"_")}.xlsx`);
   };
   const [viewSrc,setViewSrc]=useState("Todos");
   useEffect(()=>{if(source!=="Todos")setViewSrc(source);},[source]);
@@ -862,8 +880,36 @@ function Comparison({transactions,budgets,selMonth,periodMode,activeMonths,perio
     return<td><div style={{display:"flex",alignItems:"center",gap:5}}><div className="bbar" style={{width:55,display:"inline-block",flexShrink:0}}><div className="bbar-fill" style={{width:`${Math.min(100,pct)}%`,background:over?"var(--red)":"var(--green)"}}/></div><span style={{fontSize:11,color:over?"var(--red)":"var(--muted)",fontWeight:over?600:400}}>{pct}%</span></div></td>;
   };
 
-  const fuentesToShow=viewSrc==="Todos"?structure.gastos:structure.gastos.filter(f=>f.fuente===viewSrc);
 
+
+  const {fijos,variables}=getConsolidatedGastos(structure);
+  const allIngresos=structure.ingresos.flatMap(g=>g.items);
+
+  const renderBlock=(title,items,isIncome=false,color="var(--blue)")=>{
+    const blockReal=items.reduce((s,i)=>s+realForCat(i.label,isIncome),0);
+    const blockBudget=items.reduce((s,i)=>{const b=getBudget(i.label);return b!==null?s+b:s;},0);
+    return(<>
+      <tr className="frow"><td colSpan={5} style={{color}}>{title}</td></tr>
+      {items.map(item=>{
+        const b=getBudget(item.label);const r=realForCat(item.label,isIncome);
+        if(b===null&&r===0) return null;
+        return(<tr key={item.id}>
+          <td style={{paddingLeft:20,fontSize:12}}>{item.label}</td>
+          <td style={{color:"var(--muted)"}}>{b!==null?fmt(b):"—"}</td>
+          <td style={{color:r>0?(isIncome?"var(--green)":"var(--red)"):"var(--hint)",fontWeight:r>0?600:400}}>{r>0?fmt(r):"—"}</td>
+          <DiffCell budget={b} real={r} incomeDir={isIncome}/>
+          <PctBar budget={b} real={r}/>
+        </tr>);
+      })}
+      <tr className="subtotal">
+        <td style={{paddingLeft:12}}>TOTAL {title.toUpperCase()}</td>
+        <td style={{color:"var(--muted)"}}>{blockBudget>0?fmt(blockBudget):"—"}</td>
+        <td style={{color:isIncome?"var(--green)":"var(--red)",fontWeight:700}}>{blockReal>0?fmt(blockReal):"—"}</td>
+        <DiffCell budget={blockBudget>0?blockBudget:null} real={blockReal} incomeDir={isIncome}/>
+        <PctBar budget={blockBudget>0?blockBudget:null} real={blockReal}/>
+      </tr>
+    </>);
+  };
 
   return(
     <div>
@@ -871,12 +917,8 @@ function Comparison({transactions,budgets,selMonth,periodMode,activeMonths,perio
         <div className="sh-title">Presupuesto vs Real — {periodLabel}</div>
         <div className="fg">
           <button className="btn btn-o btn-sm" onClick={exportComparison}>📥 Exportar Excel</button>
-          <div className="src-tabs" style={{background:"var(--s2)"}}>
-            {["Todos",...SOURCES].map(s=><button key={s} className={`src-tab dark${viewSrc===s?" active":""}`} onClick={()=>setViewSrc(s)}>{s}</button>)}
-          </div>
         </div>
       </div>
-
       <div style={{fontSize:12,color:"var(--muted)",marginBottom:10,padding:"8px 12px",background:"var(--accent-light)",borderRadius:8,border:"1px solid #93c5fd"}}>
         ℹ La columna <strong>Ejecución</strong> muestra el % del presupuesto consumido. En verde si estás dentro, en rojo si lo has superado.
       </div>
@@ -885,69 +927,19 @@ function Comparison({transactions,budgets,selMonth,periodMode,activeMonths,perio
           <table className="cmp-table">
             <thead><tr><th style={{textAlign:"left"}}>Partida</th><th>Presupuesto</th><th>Real</th><th>Diferencia</th><th>Ejecución</th></tr></thead>
             <tbody>
-              {fuentesToShow.map(fuente=>{
-                const fItems=fuente.grupos.flatMap(g=>g.items.map(i=>i.label));
-                const fReal=fItems.reduce((s,i)=>s+realForCat(i),0);
-                const fBudget=fItems.reduce((s,i)=>{const b=getBudget(i);return b!==null?s+b:s;},0);
-                const fColor=({"Efectivo":"var(--ef)","Efectivo Ahorro":"#7e22ce","Santander":"var(--san)","Santander Ahorro":"var(--san2)","BBVA":"var(--bbva)","BBVA Tarjeta Prepago":"#0f766e"})[fuente.fuente]||"var(--muted)";
-                return(<>
-                  <tr className="frow" key={fuente.id}><td colSpan={5} style={{color:fColor}}>{fuente.label}</td></tr>
-                  {fuente.grupos.map(g=>{
-                    const gReal=g.items.reduce((s,i)=>s+realForCat(i.label),0);
-                    const gBudget=g.items.reduce((s,i)=>{const b=getBudget(i.label);return b!==null?s+b:s;},0);
-                    return(<>
-                      <tr className="grow" key={g.id}><td colSpan={5} style={{paddingLeft:16}}>{g.label}</td></tr>
-                      {g.items.map(item=>{const b=getBudget(item.label);const r=realForCat(item.label);return(
-                        <tr key={item.id}>
-                          <td style={{paddingLeft:28,fontSize:12}}>{item.label}</td>
-                          <td style={{color:"var(--muted)"}}>{b!==null?fmt(b):"—"}</td>
-                          <td style={{color:r>0?"var(--red)":"var(--hint)",fontWeight:r>0?600:400}}>{r>0?fmt(r):"—"}</td>
-                          <DiffCell budget={b} real={r}/>
-                          <PctBar budget={b} real={r}/>
-                        </tr>
-                      );})}
-                      <tr className="subtotal">
-                        <td style={{paddingLeft:16}}>Subtotal {g.label}</td>
-                        <td style={{color:"var(--muted)"}}>{gBudget>0?fmt(gBudget):"—"}</td>
-                        <td style={{color:"var(--red)",fontWeight:600}}>{gReal>0?fmt(gReal):"—"}</td>
-                        <DiffCell budget={gBudget>0?gBudget:null} real={gReal}/>
-                        <PctBar budget={gBudget>0?gBudget:null} real={gReal}/>
-                      </tr>
-                    </>);
-                  })}
-                  <tr className="subtotal" style={{borderTop:"3px solid var(--border2)"}}>
-                    <td style={{paddingLeft:12,color:fColor}}>TOTAL {fuente.label.toUpperCase()}</td>
-                    <td style={{color:"var(--muted)"}}>{fBudget>0?fmt(fBudget):"—"}</td>
-                    <td style={{color:"var(--red)",fontWeight:700}}>{fReal>0?fmt(fReal):"—"}</td>
-                    <DiffCell budget={fBudget>0?fBudget:null} real={fReal}/>
-                    <PctBar budget={fBudget>0?fBudget:null} real={fReal}/>
-                  </tr>
-                </>);
-              })}
-              <tr className="frow"><td colSpan={5} style={{color:"var(--green)"}}>Ingresos</td></tr>
-              {structure.ingresos.map(g=>{
-                const gReal=g.items.reduce((s,i)=>s+realForCat(i.label,true),0);
-                const gBudget=g.items.reduce((s,i)=>{const b=getBudget(i.label);return b!==null?s+b:s;},0);
-                return(<>
-                  <tr className="grow" key={g.id}><td colSpan={5} style={{paddingLeft:16}}>{g.label}</td></tr>
-                  {g.items.map(item=>{const b=getBudget(item.label);const r=realForCat(item.label,true);return(
-                    <tr key={item.id}>
-                      <td style={{paddingLeft:28,fontSize:12}}>{item.label}</td>
-                      <td style={{color:"var(--muted)"}}>{b!==null?fmt(b):"—"}</td>
-                      <td style={{color:r>0?"var(--green)":"var(--hint)",fontWeight:r>0?600:400}}>{r>0?fmt(r):"—"}</td>
-                      <DiffCell budget={b} real={r} incomeDir/>
-                      <PctBar budget={b} real={r}/>
-                    </tr>
-                  );})}
-                  <tr className="subtotal">
-                    <td style={{paddingLeft:16}}>Subtotal {g.label}</td>
-                    <td style={{color:"var(--muted)"}}>{gBudget>0?fmt(gBudget):"—"}</td>
-                    <td style={{color:"var(--green)",fontWeight:600}}>{gReal>0?fmt(gReal):"—"}</td>
-                    <DiffCell budget={gBudget>0?gBudget:null} real={gReal} incomeDir/>
-                    <PctBar budget={gBudget>0?gBudget:null} real={gReal}/>
-                  </tr>
-                </>);
-              })}
+              {renderBlock("Gastos Fijos",fijos,false,"#1d4ed8")}
+              {renderBlock("Gastos Variables",variables,false,"var(--red)")}
+              {renderBlock("Ingresos",allIngresos,true,"var(--green)")}
+              {(()=>{
+                const totalFijosReal=fijos.reduce((s,i)=>s+realForCat(i.label),0);
+                const totalVarReal=variables.reduce((s,i)=>s+realForCat(i.label),0);
+                const totalIngReal=allIngresos.reduce((s,i)=>s+realForCat(i.label,true),0);
+                const saldo=totalIngReal-totalFijosReal-totalVarReal;
+                return(<tr style={{background:"#f0fdf4"}}>
+                  <td colSpan={2} style={{fontWeight:700,fontSize:13,paddingLeft:12}}>SALDO DEL PERÍODO</td>
+                  <td colSpan={3} style={{textAlign:"right",fontFamily:"var(--fd)",fontSize:16,fontWeight:700,color:saldo>=0?"var(--green)":"var(--red)"}}>{fmt(saldo)}</td>
+                </tr>);
+              })()}
             </tbody>
           </table>
         </div>
@@ -956,7 +948,6 @@ function Comparison({transactions,budgets,selMonth,periodMode,activeMonths,perio
   );
 }
 
-// ── PRESUPUESTOS ──────────────────────────────────────────────────────────────
 function Budgets({budgets,setBudgets,selMonth,periodMode,activeMonths,periodLabel,monthTxs,showToast,structure}){
   const [local,setLocal]=useState(()=>JSON.parse(JSON.stringify(budgets)));
   const [mode,setMode]=useState("monthly");const [open,setOpen]=useState(null);
@@ -964,7 +955,16 @@ function Budgets({budgets,setBudgets,selMonth,periodMode,activeMonths,periodLabe
   const getVal=(label)=>{const e=local[label];if(!e)return"";const key=mode==="annual"?"*":selMonth;return e[key]??e["*"]??"";}
   const save=()=>{setBudgets(local);showToast("Presupuestos guardados");};
   const renderSection=(title,grupos,color)=>{const isOpen=open===title;return(<div key={title}><div className="acc-hdr" onClick={()=>setOpen(isOpen?null:title)}><span style={{fontWeight:600,fontSize:13,color}}>{title}</span><span style={{color:"var(--hint)",fontSize:11}}>{isOpen?"▲":"▼"}</span></div>{isOpen&&<div className="acc-body">{grupos.map(g=>(<div key={g.id}><div style={{padding:"6px 14px",fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".07em",background:"var(--s2)"}}>{g.label}</div>{g.items.map(item=>{const real=monthTxs.filter(t=>t.category===item.label).reduce((s,t)=>s+Math.abs(t.amount),0);return(<div key={item.id} style={{display:"flex",alignItems:"center",gap:9,padding:"7px 14px 7px 24px",borderBottom:"1px solid var(--border)"}}><span style={{flex:1,fontSize:13,color:"var(--text)",fontWeight:500}}>{item.label}</span>{real>0&&<span style={{fontSize:11,color:"var(--red)",fontWeight:600}}>Real: {fmt(real)}</span>}<input type="number" min="0" step="10" value={getVal(item.label)} onChange={e=>setVal(item.label,e.target.value)} placeholder="—" style={{width:100,background:"#fff",border:"1px solid var(--border)",color:"var(--text)",borderRadius:7,padding:"5px 9px",fontSize:13,fontFamily:"var(--ff)",outline:"none",textAlign:"right"}}/><span style={{fontSize:11,color:"var(--hint)",width:12}}>€</span></div>);})}</div>))}</div>}</div>);};
-  return(<div><div className="sh"><div className="sh-title">Presupuestos</div><div className="fg"><div className="period-tabs"><button className={`period-tab${mode==="monthly"?" active":""}`} onClick={()=>setMode("monthly")}>Este mes</button><button className={`period-tab${mode==="annual"?" active":""}`} onClick={()=>setMode("annual")}>Todos los meses</button></div><button className="btn btn-p" onClick={save}>💾 Guardar</button></div></div><div style={{fontSize:12,color:"var(--muted)",marginBottom:13,padding:"8px 12px",background:"var(--accent-light)",borderRadius:8,border:"1px solid #93c5fd"}}>{mode==="annual"?"Los valores anuales se aplican a todos los meses. Puedes sobreescribirlos mes a mes.":"Presupuesto específico para "+MONTHS_FULL[parseInt(selMonth.split("-")[1])-1]+" "+selMonth.split("-")[0]+"."}</div>{structure.gastos.map(f=>renderSection(f.label,f.grupos,({"Efectivo":"var(--ef)","Efectivo Ahorro":"#7e22ce","Santander":"var(--san)","Santander Ahorro":"var(--san2)","BBVA":"var(--bbva)","BBVA Tarjeta Prepago":"#0f766e"})[f.fuente]||"var(--muted)"))}{renderSection("Ingresos",structure.ingresos,"var(--green)")}<div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}><button className="btn btn-p" onClick={save}>💾 Guardar presupuestos</button></div></div>);
+  return(<div><div className="sh"><div className="sh-title">Presupuestos</div><div className="fg"><div className="period-tabs"><button className={`period-tab${mode==="monthly"?" active":""}`} onClick={()=>setMode("monthly")}>Este mes</button><button className={`period-tab${mode==="annual"?" active":""}`} onClick={()=>setMode("annual")}>Todos los meses</button></div><button className="btn btn-p" onClick={save}>💾 Guardar</button></div></div><div style={{fontSize:12,color:"var(--muted)",marginBottom:13,padding:"8px 12px",background:"var(--accent-light)",borderRadius:8,border:"1px solid #93c5fd"}}>{mode==="annual"?"Los valores anuales se aplican a todos los meses. Puedes sobreescribirlos mes a mes.":"Presupuesto específico para "+MONTHS_FULL[parseInt(selMonth.split("-")[1])-1]+" "+selMonth.split("-")[0]+"."}</div>{(()=>{
+    const {fijos,variables}=getConsolidatedGastos(structure);
+    const fijoGrupo={id:"fijos-virtual",label:"Gastos Fijos",items:fijos};
+    const varGrupo={id:"vars-virtual",label:"Gastos Variables",items:variables};
+    return(<>
+      {renderSection("Gastos Fijos",[fijoGrupo],"#1d4ed8")}
+      {renderSection("Gastos Variables",[varGrupo],"var(--red)")}
+      {renderSection("Ingresos",structure.ingresos,"var(--green)")}
+    </>);
+  })()}<div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}><button className="btn btn-p" onClick={save}>💾 Guardar presupuestos</button></div></div>);
 }
 
 // ── CRITERIOS ─────────────────────────────────────────────────────────────────
