@@ -648,19 +648,30 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
             const {fijos,variables}=getConsolidatedGastos(structure);
             const allIngresos=structure.ingresos.flatMap(g=>g.items);
             const EXCL=new Set(["Traspasos","Traspaso","No categorizable"]);
+            // Income category labels
+            const ingCatLabels=new Set(allIngresos.map(i=>i.label));
+            // Gastos: negative amounts, or positive amounts in expense categories (reembolsos = menor gasto)
+            // Ingresos: only amounts classified in income categories
             const calcCat=(items,isIncome=false)=>items.map(item=>{
-              const amt=filteredTxs.filter(t=>t.category===item.label&&!EXCL.has(t.category)&&(isIncome?t.amount>0:t.amount<0)).reduce((s,t)=>s+Math.abs(t.amount),0);
+              let amt;
+              if(isIncome){
+                // Income: sum all transactions (positive) in this income category
+                amt=filteredTxs.filter(t=>t.category===item.label&&t.amount>0).reduce((s,t)=>s+t.amount,0);
+              } else {
+                // Expense: net = expenses minus reimbursements in same category
+                const exp=filteredTxs.filter(t=>t.category===item.label&&t.amount<0).reduce((s,t)=>s+Math.abs(t.amount),0);
+                const reimb=filteredTxs.filter(t=>t.category===item.label&&t.amount>0&&!ingCatLabels.has(t.category)).reduce((s,t)=>s+t.amount,0);
+                amt=Math.max(0,exp-reimb);
+              }
               return{label:item.label,amt};
             }).filter(i=>i.amt>0).sort((a,b)=>b.amt-a.amt);
-            // Also capture income transactions regardless of category (positive amounts)
-            const totalIngReal=filteredTxs.filter(t=>t.amount>0&&!EXCL.has(t.category||"")).reduce((s,t)=>s+t.amount,0);
             const fijosTotals=calcCat(fijos);
             const varTotals=calcCat(variables);
             const ingTotals=calcCat(allIngresos,true);
-            // Use actual totals from transactions (not just categorized ones)
-            const totalFijos=filteredTxs.filter(t=>t.amount<0&&!EXCL.has(t.category||"")&&GASTOS_FIJOS.has(t.category||"")).reduce((s,t)=>s+Math.abs(t.amount),0);
-            const totalVar=filteredTxs.filter(t=>t.amount<0&&!EXCL.has(t.category||"")&&!GASTOS_FIJOS.has(t.category||"")).reduce((s,t)=>s+Math.abs(t.amount),0);
-            const totalIng=totalIngReal;
+            // Totals: fijos and variables net of reimbursements, ingresos only from income categories
+            const totalFijos=fijosTotals.reduce((s,i)=>s+i.amt,0);
+            const totalVar=varTotals.reduce((s,i)=>s+i.amt,0);
+            const totalIng=ingTotals.reduce((s,i)=>s+i.amt,0);
             const saldo=totalIng-totalFijos-totalVar;
             const Section=({title,items,total,color,isIncome=false})=>items.length===0?null:(
               <div style={{marginBottom:12}}>
@@ -678,12 +689,7 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
               </div>
             );
             return(<>
-              <Section title="Ingresos" items={
-                Object.entries(filteredTxs.filter(t=>t.amount>0&&!EXCL.has(t.category||"")).reduce((acc,t)=>{
-                  const k=t.category||"Sin clasificar";
-                  acc[k]=(acc[k]||0)+t.amount; return acc;
-                },{})).map(([label,amt])=>({label,amt})).sort((a,b)=>b.amt-a.amt)
-              } total={totalIng} color="var(--green)" isIncome/>
+              <Section title="Ingresos" items={ingTotals} total={totalIng} color="var(--green)" isIncome/>
               <Section title="Gastos fijos" items={fijosTotals} total={totalFijos} color="var(--blue)"/>
               <Section title="Gastos variables" items={varTotals} total={totalVar} color="var(--red)"/>
               <div style={{display:"flex",justifyContent:"space-between",paddingTop:8,borderTop:"2px solid var(--border)",marginTop:4}}>
