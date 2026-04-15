@@ -647,16 +647,20 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
           {(()=>{
             const {fijos,variables}=getConsolidatedGastos(structure);
             const allIngresos=structure.ingresos.flatMap(g=>g.items);
+            const EXCL=new Set(["Traspasos","Traspaso","No categorizable"]);
             const calcCat=(items,isIncome=false)=>items.map(item=>{
-              const amt=filteredTxs.filter(t=>t.category===item.label&&(isIncome?t.amount>0:t.amount<0)).reduce((s,t)=>s+Math.abs(t.amount),0);
+              const amt=filteredTxs.filter(t=>t.category===item.label&&!EXCL.has(t.category)&&(isIncome?t.amount>0:t.amount<0)).reduce((s,t)=>s+Math.abs(t.amount),0);
               return{label:item.label,amt};
             }).filter(i=>i.amt>0).sort((a,b)=>b.amt-a.amt);
+            // Also capture income transactions regardless of category (positive amounts)
+            const totalIngReal=filteredTxs.filter(t=>t.amount>0&&!EXCL.has(t.category||"")).reduce((s,t)=>s+t.amount,0);
             const fijosTotals=calcCat(fijos);
             const varTotals=calcCat(variables);
             const ingTotals=calcCat(allIngresos,true);
-            const totalFijos=fijosTotals.reduce((s,i)=>s+i.amt,0);
-            const totalVar=varTotals.reduce((s,i)=>s+i.amt,0);
-            const totalIng=ingTotals.reduce((s,i)=>s+i.amt,0);
+            // Use actual totals from transactions (not just categorized ones)
+            const totalFijos=filteredTxs.filter(t=>t.amount<0&&!EXCL.has(t.category||"")&&GASTOS_FIJOS.has(t.category||"")).reduce((s,t)=>s+Math.abs(t.amount),0);
+            const totalVar=filteredTxs.filter(t=>t.amount<0&&!EXCL.has(t.category||"")&&!GASTOS_FIJOS.has(t.category||"")).reduce((s,t)=>s+Math.abs(t.amount),0);
+            const totalIng=totalIngReal;
             const saldo=totalIng-totalFijos-totalVar;
             const Section=({title,items,total,color,isIncome=false})=>items.length===0?null:(
               <div style={{marginBottom:12}}>
@@ -674,7 +678,12 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
               </div>
             );
             return(<>
-              <Section title="Ingresos" items={ingTotals} total={totalIng} color="var(--green)" isIncome/>
+              <Section title="Ingresos" items={
+                Object.entries(filteredTxs.filter(t=>t.amount>0&&!EXCL.has(t.category||"")).reduce((acc,t)=>{
+                  const k=t.category||"Sin clasificar";
+                  acc[k]=(acc[k]||0)+t.amount; return acc;
+                },{})).map(([label,amt])=>({label,amt})).sort((a,b)=>b.amt-a.amt)
+              } total={totalIng} color="var(--green)" isIncome/>
               <Section title="Gastos fijos" items={fijosTotals} total={totalFijos} color="var(--blue)"/>
               <Section title="Gastos variables" items={varTotals} total={totalVar} color="var(--red)"/>
               <div style={{display:"flex",justifyContent:"space-between",paddingTop:8,borderTop:"2px solid var(--border)",marginTop:4}}>
@@ -1050,7 +1059,85 @@ function StructureEditor({structure,setStructure,showToast}){
   const IE=({id,val,path})=>{if(editingId===id)return<input className="inline-input" value={editVal} autoFocus onChange={e=>setEditVal(e.target.value)} onBlur={()=>renameItem(path,editVal)} onKeyDown={e=>{if(e.key==="Enter")renameItem(path,editVal);if(e.key==="Escape")setEditingId(null);}}/>;return<span style={{fontSize:13,flex:1,cursor:"text",color:"var(--text)",fontWeight:500}} onDoubleClick={()=>{setEditingId(id);setEditVal(val);}}>{val} <span style={{fontSize:10,color:"var(--hint)"}}>✎</span></span>;};
   const AddLine=({placeholder,onAdd})=>{const[v,setV]=useState("");return<div style={{display:"flex",gap:5,padding:"6px 10px"}}><input value={v} onChange={e=>setV(e.target.value)} placeholder={placeholder} onKeyDown={e=>{if(e.key==="Enter"&&v.trim()){onAdd(v.trim());setV("");}}} style={{flex:1,background:"var(--s2)",border:"1px dashed var(--border2)",color:"var(--text)",borderRadius:6,padding:"4px 9px",fontSize:12,fontFamily:"var(--ff)",outline:"none"}}/><button className="btn btn-g btn-sm" onClick={()=>{if(v.trim()){onAdd(v.trim());setV("");}}}>+ Añadir</button></div>;};
   const renderBloque=(fuente)=>{const isOpen=open===fuente.id;const fColor=({"Efectivo":"var(--ef)","Efectivo Ahorro":"#7e22ce","Santander":"var(--san)","Santander Ahorro":"var(--san2)","BBVA":"var(--bbva)","BBVA Tarjeta Prepago":"#0f766e"})[fuente.fuente]||"var(--muted)";const fBg=({"Efectivo":"var(--ef-bg)","Efectivo Ahorro":"#f3e8ff","Santander":"var(--san-bg)","Santander Ahorro":"var(--san2-bg)","BBVA":"var(--bbva-bg)","BBVA Tarjeta Prepago":"#ccfbf1"})[fuente.fuente]||"var(--s2)";return(<div key={fuente.id} style={{marginBottom:8}}><div className="acc-hdr"><div style={{flex:1,display:"flex",alignItems:"center",gap:8}} onClick={()=>setOpen(isOpen?null:fuente.id)}><IE id={`b-${fuente.id}`} val={fuente.label} path={{type:"bloque",bid:fuente.id}}/><span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:fBg,color:fColor,fontWeight:600}}>{fuente.fuente}</span></div><button className="btn btn-d btn-sm" style={{padding:"2px 7px",marginLeft:4}} onClick={()=>deleteItem({type:"bloque",bid:fuente.id})}>✕</button><span style={{color:"var(--hint)",fontSize:11,marginLeft:6}} onClick={()=>setOpen(isOpen?null:fuente.id)}>{isOpen?"▲":"▼"}</span></div>{isOpen&&<div className="acc-body">{fuente.grupos.map(g=>(<div key={g.id} style={{margin:"6px 10px",border:"1px solid var(--border)",borderRadius:8,overflow:"hidden"}}><div style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",background:"var(--s2)"}}><IE id={`g-${g.id}`} val={g.label} path={{type:"grupo",bid:fuente.id,gid:g.id}}/><button className="btn btn-d btn-sm" style={{padding:"2px 7px",fontSize:11}} onClick={()=>deleteItem({type:"grupo",bid:fuente.id,gid:g.id})}>✕</button></div>{g.items.map(item=>(<div key={item.id} className="editable-row" style={{paddingLeft:22}}><IE id={`i-${item.id}`} val={item.label} path={{type:"item",gid:g.id,iid:item.id}}/><button className="btn btn-d btn-sm" style={{padding:"1px 6px",fontSize:11,opacity:.6}} onClick={()=>deleteItem({type:"item",gid:g.id,iid:item.id})}>✕</button></div>))}<AddLine placeholder="+ Nueva partida (Enter para añadir)..." onAdd={label=>addToGroup(g.id,label)}/></div>))}<AddLine placeholder="+ Nuevo grupo..." onAdd={label=>addGroup(fuente.id,label)}/></div>}</div>);};
-  return(<div><div className="sh"><div className="sh-title">Estructura de categorías</div><div style={{fontSize:12,color:"var(--muted)"}}>Doble clic para renombrar · ✕ para eliminar · Enter para añadir</div></div>{structure.gastos.map(f=>renderBloque(f))}<div style={{marginBottom:8}}><div className="acc-hdr" onClick={()=>setOpen(open==="ing"?null:"ing")}><span style={{fontWeight:600,fontSize:13,color:"var(--green)"}}>Ingresos</span><span style={{color:"var(--hint)",fontSize:11}}>{open==="ing"?"▲":"▼"}</span></div>{open==="ing"&&<div className="acc-body">{structure.ingresos.map(g=>(<div key={g.id} style={{margin:"6px 10px",border:"1px solid var(--border)",borderRadius:8,overflow:"hidden"}}><div style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",background:"var(--s2)"}}><IE id={`ig-${g.id}`} val={g.label} path={{type:"grupo",bid:"ing",gid:g.id}}/><button className="btn btn-d btn-sm" style={{padding:"2px 7px",fontSize:11}} onClick={()=>deleteItem({type:"grupo",bid:"ing",gid:g.id})}>✕</button></div>{g.items.map(item=>(<div key={item.id} className="editable-row" style={{paddingLeft:22}}><IE id={`ii-${item.id}`} val={item.label} path={{type:"item",gid:g.id,iid:item.id}}/><button className="btn btn-d btn-sm" style={{padding:"1px 6px",fontSize:11,opacity:.6}} onClick={()=>deleteItem({type:"item",gid:g.id,iid:item.id})}>✕</button></div>))}<AddLine placeholder="+ Nueva partida..." onAdd={label=>addToGroup(g.id,label)}/></div>))}<AddLine placeholder="+ Nuevo grupo de ingresos..." onAdd={label=>addGroup(null,label,true)}/></div>}</div><div className="card" style={{marginTop:14}}><div className="card-title">Añadir nuevo bloque de gastos</div><NewBloqueForm onAdd={(label,fuente)=>{const next=JSON.parse(JSON.stringify(structure));next.gastos.push({id:uid(),fuente,label,grupos:[]});save(next);}}/></div></div>);
+  const allItems=structure.gastos.flatMap(f=>f.grupos.flatMap(g=>g.items));
+  const {fijos:fijoItems,variables:varItems}=getConsolidatedGastos(structure);
+
+  const renderFlatBlock=(title,items,color,isFijo)=>{
+    const isOpen=open===title;
+    return(<div style={{marginBottom:8}}>
+      <div className="acc-hdr" onClick={()=>setOpen(isOpen?null:title)}>
+        <span style={{fontWeight:600,fontSize:13,color}}>{title}</span>
+        <span style={{fontSize:11,color:"var(--muted)",marginRight:8}}>{items.length} partidas</span>
+        <span style={{color:"var(--hint)",fontSize:11}}>{isOpen?"▲":"▼"}</span>
+      </div>
+      {isOpen&&<div className="acc-body">
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:4,padding:"8px 10px"}}>
+          {items.map(item=>(
+            <div key={item.id} style={{display:"flex",alignItems:"center",gap:5,padding:"4px 8px",border:"1px solid var(--border)",borderRadius:7,background:"var(--s1)"}}>
+              <span style={{flex:1,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</span>
+              <button className="btn btn-o btn-sm" style={{padding:"1px 6px",fontSize:10,flexShrink:0}}
+                title={isFijo?"Mover a Variables":"Mover a Fijos"}
+                onClick={()=>{if(isFijo)GASTOS_FIJOS.delete(item.label);else GASTOS_FIJOS.add(item.label);save(JSON.parse(JSON.stringify(structure)));showToast(`"${item.label}" → ${isFijo?"Variables":"Fijos"}`);}}
+              >{isFijo?"→ Var":"→ Fijo"}</button>
+            </div>
+          ))}
+        </div>
+        <div style={{padding:"6px 10px",borderTop:"1px solid var(--border)",marginTop:4}}>
+          <AddLine placeholder={`+ Nueva partida en ${title}...`} onAdd={label=>{
+            if(isFijo) GASTOS_FIJOS.add(label);
+            const next=JSON.parse(JSON.stringify(structure));
+            const firstGrupo=next.gastos[0]?.grupos[0];
+            if(firstGrupo) firstGrupo.items.push({id:uid(),label});
+            save(next);
+          }}/>
+        </div>
+      </div>}
+    </div>);
+  };
+
+  const renderIngresosBlock=()=>{
+    const isOpen=open==="ing";
+    const allIng=structure.ingresos.flatMap(g=>g.items);
+    return(<div style={{marginBottom:8}}>
+      <div className="acc-hdr" onClick={()=>setOpen(isOpen?null:"ing")}>
+        <span style={{fontWeight:600,fontSize:13,color:"var(--green)"}}>Ingresos</span>
+        <span style={{fontSize:11,color:"var(--muted)",marginRight:8}}>{allIng.length} partidas</span>
+        <span style={{color:"var(--hint)",fontSize:11}}>{isOpen?"▲":"▼"}</span>
+      </div>
+      {isOpen&&<div className="acc-body">
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:4,padding:"8px 10px"}}>
+          {allIng.map(item=>(
+            <div key={item.id} style={{display:"flex",alignItems:"center",gap:5,padding:"4px 8px",border:"1px solid var(--border)",borderRadius:7,background:"var(--s1)"}}>
+              <span style={{flex:1,fontSize:12}}>{item.label}</span>
+              <button className="btn btn-d btn-sm" style={{padding:"1px 5px",fontSize:10,opacity:.6}} onClick={()=>{
+                const next=JSON.parse(JSON.stringify(structure));
+                next.ingresos=next.ingresos.map(g=>({...g,items:g.items.filter(i=>i.id!==item.id)}));
+                save(next);
+              }}>✕</button>
+            </div>
+          ))}
+        </div>
+        <div style={{padding:"6px 10px",borderTop:"1px solid var(--border)",marginTop:4}}>
+          <AddLine placeholder="+ Nueva partida de ingreso..." onAdd={label=>{
+            const next=JSON.parse(JSON.stringify(structure));
+            if(!next.ingresos[0]) next.ingresos.push({id:uid(),label:"Otros Ingresos",items:[]});
+            next.ingresos[0].items.push({id:uid(),label});
+            save(next);
+          }}/>
+        </div>
+      </div>}
+    </div>);
+  };
+
+  return(<div>
+    <div className="sh">
+      <div className="sh-title">Estructura de categorías</div>
+      <div style={{fontSize:12,color:"var(--muted)"}}>Clic para expandir · → para mover entre bloques · Enter para añadir</div>
+    </div>
+    {renderFlatBlock("Gastos Fijos",fijoItems,"#1d4ed8",true)}
+    {renderFlatBlock("Gastos Variables",varItems,"var(--red)",false)}
+    {renderIngresosBlock()}
+  </div>);
 }
 
 function NewBloqueForm({onAdd}){const [label,setLabel]=useState("");const [fuente,setFuente]=useState("Efectivo");return(<div style={{display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap"}}><div className="field" style={{flex:1}}><label>Nombre del bloque</label><input value={label} onChange={e=>setLabel(e.target.value)} placeholder="Ej: Gastos Empresa"/></div><div className="field"><label>Cuenta</label><select value={fuente} onChange={e=>setFuente(e.target.value)}>{SOURCES.map(s=><option key={s} value={s}>{s}</option>)}</select></div><button className="btn btn-p" onClick={()=>{if(label.trim()){onAdd(label.trim(),fuente);setLabel("");}}}>Crear bloque</button></div>);}
