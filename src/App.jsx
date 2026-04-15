@@ -644,12 +644,46 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
       </div>
       <div className="grid2" style={{marginBottom:14}}>
         <div className="card">
-          <div className="card-title">Evolución 6 meses</div>
-          <div style={{display:"flex",alignItems:"flex-end",gap:6,height:90}}>
-            {months6.map(mo=>{const mT=transactions.filter(t=>t.date?.startsWith(mo)&&(source==="Todos"||t.source===source));const inc=mT.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0);const exp=mT.filter(t=>t.amount<0).reduce((s,t)=>s+Math.abs(t.amount),0);const isCur=mo===selMonth;return(<div key={mo} style={{flex:1,display:"flex",alignItems:"flex-end",justifyContent:"center",gap:2}}><div style={{width:12,borderRadius:"3px 3px 0 0",height:`${Math.round(inc/trendMax*100)}%`,background:"var(--green)",opacity:isCur?1:.4,transition:"height .3s"}}/><div style={{width:12,borderRadius:"3px 3px 0 0",height:`${Math.round(exp/trendMax*100)}%`,background:"var(--red)",opacity:isCur?1:.4,transition:"height .3s"}}/></div>);})}
-          </div>
-          <div style={{display:"flex",gap:5,marginTop:7}}>{months6.map(mo=><div key={mo} style={{flex:1,textAlign:"center",fontSize:10,color:"var(--muted)",fontWeight:500}}>{MONTHS[parseInt(mo.split("-")[1])-1]}</div>)}</div>
-          <div style={{display:"flex",gap:14,marginTop:10}}>{[["var(--green)","Ingresos"],["var(--red)","Gastos"]].map(([c,l])=><span key={l} style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"var(--muted)"}}><span style={{width:10,height:10,borderRadius:3,background:c,display:"inline-block"}}/>{l}</span>)}</div>
+          <div className="card-title">Resumen del período — {periodLabel}</div>
+          {(()=>{
+            const {fijos,variables}=getConsolidatedGastos(structure);
+            const allIngresos=structure.ingresos.flatMap(g=>g.items);
+            const calcCat=(items,isIncome=false)=>items.map(item=>{
+              const amt=filteredTxs.filter(t=>t.category===item.label&&(isIncome?t.amount>0:t.amount<0)).reduce((s,t)=>s+Math.abs(t.amount),0);
+              return{label:item.label,amt};
+            }).filter(i=>i.amt>0).sort((a,b)=>b.amt-a.amt);
+            const fijosTotals=calcCat(fijos);
+            const varTotals=calcCat(variables);
+            const ingTotals=calcCat(allIngresos,true);
+            const totalFijos=fijosTotals.reduce((s,i)=>s+i.amt,0);
+            const totalVar=varTotals.reduce((s,i)=>s+i.amt,0);
+            const totalIng=ingTotals.reduce((s,i)=>s+i.amt,0);
+            const saldo=totalIng-totalFijos-totalVar;
+            const Section=({title,items,total,color,isIncome=false})=>items.length===0?null:(
+              <div style={{marginBottom:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,paddingBottom:4,borderBottom:"1px solid var(--border)"}}>
+                  <span style={{fontSize:12,fontWeight:700,color,textTransform:"uppercase",letterSpacing:".06em"}}>{title}</span>
+                  <span style={{fontSize:13,fontWeight:700,color}}>{fmt(total)}</span>
+                </div>
+                {items.slice(0,6).map(i=>(
+                  <div key={i.label} style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3,paddingLeft:8}}>
+                    <span style={{color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"65%"}}>{i.label}</span>
+                    <span style={{fontWeight:500,color:isIncome?"var(--green)":"var(--text)"}}>{fmt(i.amt)}</span>
+                  </div>
+                ))}
+                {items.length>6&&<div style={{fontSize:11,color:"var(--hint)",paddingLeft:8}}>…y {items.length-6} más</div>}
+              </div>
+            );
+            return(<>
+              <Section title="Ingresos" items={ingTotals} total={totalIng} color="var(--green)" isIncome/>
+              <Section title="Gastos fijos" items={fijosTotals} total={totalFijos} color="var(--blue)"/>
+              <Section title="Gastos variables" items={varTotals} total={totalVar} color="var(--red)"/>
+              <div style={{display:"flex",justifyContent:"space-between",paddingTop:8,borderTop:"2px solid var(--border)",marginTop:4}}>
+                <span style={{fontWeight:700,fontSize:13}}>Saldo del período</span>
+                <span style={{fontFamily:"var(--fd)",fontSize:17,fontWeight:700,color:saldo>=0?"var(--green)":"var(--red)"}}>{fmt(saldo)}</span>
+              </div>
+            </>);
+          })()}
         </div>
         <div className="card">
           <div className="card-title">Disponibilidad por cuenta</div>
