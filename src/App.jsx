@@ -1074,11 +1074,24 @@ function StructureEditor({structure,setStructure,showToast}){
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:4,padding:"8px 10px"}}>
           {items.map(item=>(
             <div key={item.id} style={{display:"flex",alignItems:"center",gap:5,padding:"4px 8px",border:"1px solid var(--border)",borderRadius:7,background:"var(--s1)"}}>
-              <span style={{flex:1,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</span>
+              {editingId===`flat-${item.id}`
+                ?<input className="inline-input" value={editVal} autoFocus style={{flex:1,fontSize:12}}
+                    onChange={e=>setEditVal(e.target.value)}
+                    onBlur={()=>{if(editVal.trim()){const next=JSON.parse(JSON.stringify(structure));const allG=next.gastos.flatMap(f=>f.grupos);const g=allG.find(g=>g.items.some(i=>i.id===item.id));if(g){const it=g.items.find(i=>i.id===item.id);if(it){if(GASTOS_FIJOS.has(it.label)){GASTOS_FIJOS.delete(it.label);GASTOS_FIJOS.add(editVal.trim());}it.label=editVal.trim();}}save(next);}setEditingId(null);}}
+                    onKeyDown={e=>{if(e.key==="Escape")setEditingId(null);}}
+                  />
+                :<span style={{flex:1,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"text"}}
+                    title="Doble clic para renombrar"
+                    onDoubleClick={()=>{setEditingId(`flat-${item.id}`);setEditVal(item.label);}}
+                  >{item.label} <span style={{fontSize:10,color:"var(--hint)"}}>✎</span></span>
+              }
               <button className="btn btn-o btn-sm" style={{padding:"1px 6px",fontSize:10,flexShrink:0}}
                 title={isFijo?"Mover a Variables":"Mover a Fijos"}
                 onClick={()=>{if(isFijo)GASTOS_FIJOS.delete(item.label);else GASTOS_FIJOS.add(item.label);save(JSON.parse(JSON.stringify(structure)));showToast(`"${item.label}" → ${isFijo?"Variables":"Fijos"}`);}}
               >{isFijo?"→ Var":"→ Fijo"}</button>
+              <button className="btn btn-d btn-sm" style={{padding:"1px 5px",fontSize:10,opacity:.5}}
+                onClick={()=>{const next=JSON.parse(JSON.stringify(structure));const allG=next.gastos.flatMap(f=>f.grupos);allG.forEach(g=>{g.items=g.items.filter(i=>i.id!==item.id);});GASTOS_FIJOS.delete(item.label);save(next);}}
+              >✕</button>
             </div>
           ))}
         </div>
@@ -1108,7 +1121,16 @@ function StructureEditor({structure,setStructure,showToast}){
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:4,padding:"8px 10px"}}>
           {allIng.map(item=>(
             <div key={item.id} style={{display:"flex",alignItems:"center",gap:5,padding:"4px 8px",border:"1px solid var(--border)",borderRadius:7,background:"var(--s1)"}}>
-              <span style={{flex:1,fontSize:12}}>{item.label}</span>
+              {editingId===`ing-${item.id}`
+                ?<input className="inline-input" value={editVal} autoFocus style={{flex:1,fontSize:12}}
+                    onChange={e=>setEditVal(e.target.value)}
+                    onBlur={()=>{if(editVal.trim()){const next=JSON.parse(JSON.stringify(structure));next.ingresos.forEach(g=>{const it=g.items.find(i=>i.id===item.id);if(it)it.label=editVal.trim();});save(next);}setEditingId(null);}}
+                    onKeyDown={e=>{if(e.key==="Escape")setEditingId(null);}}
+                  />
+                :<span style={{flex:1,fontSize:12,cursor:"text"}} title="Doble clic para renombrar"
+                    onDoubleClick={()=>{setEditingId(`ing-${item.id}`);setEditVal(item.label);}}
+                  >{item.label} <span style={{fontSize:10,color:"var(--hint)"}}>✎</span></span>
+              }
               <button className="btn btn-d btn-sm" style={{padding:"1px 5px",fontSize:10,opacity:.6}} onClick={()=>{
                 const next=JSON.parse(JSON.stringify(structure));
                 next.ingresos=next.ingresos.map(g=>({...g,items:g.items.filter(i=>i.id!==item.id)}));
