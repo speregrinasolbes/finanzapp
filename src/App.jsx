@@ -860,9 +860,9 @@ function Transactions({filteredTxs,source,periodLabel,structure,onAdd,onEdit,onS
                           >
                             <option value="">Sin clasificar</option>
                             <optgroup label="── Gastos ──" style={{color:"var(--muted)"}}/>
-                            {structure.gastos.flatMap(f=>f.grupos.flatMap(g=>g.items)).map(c=><option key={c.id} value={c.label}>{c.label}</option>)}
+                            {[...structure.gastos.flatMap(f=>f.grupos.flatMap(g=>g.items))].sort((a,b)=>a.label.localeCompare(b.label,"es")).map(c=><option key={c.id} value={c.label}>{c.label}</option>)}
                             <optgroup label="── Ingresos ──" style={{color:"var(--muted)"}}/>
-                            {structure.ingresos.flatMap(g=>g.items).map(c=><option key={c.id} value={c.label}>{c.label}</option>)}
+                            {[...structure.ingresos.flatMap(g=>g.items)].sort((a,b)=>a.label.localeCompare(b.label,"es")).map(c=><option key={c.id} value={c.label}>{c.label}</option>)}
                           </select>
                           {tx.aiClassified&&<span className="ai-chip">✦ IA</span>}
                           {tx.ruleClassified&&<span className="rule-chip">⚡ Regla</span>}
@@ -1350,8 +1350,8 @@ function TxModal({tx,structure,onClose,onSave,onDelete}){
           <div className="field"><label>Fecha</label><input type="date" value={form.date} onChange={e=>set("date",e.target.value)}/></div>
           <div className="field"><label>Cuenta</label><select value={form.source} onChange={e=>set("source",e.target.value)}>{SOURCES.map(s=><option key={s} value={s}>{s}</option>)}</select></div>
           <div className="field"><label>Categoría</label><select value={form.category} onChange={e=>set("category",e.target.value)}><option value="">Sin categoría</option>
-                <optgroup label="Gastos">{allGastos.map(c=><option key={c.id} value={c.label}>{c.label}</option>)}</optgroup>
-                <optgroup label="Ingresos">{allIngresos.map(c=><option key={c.id} value={c.label}>{c.label}</option>)}</optgroup></select></div>
+                <optgroup label="Gastos">{[...allGastos].sort((a,b)=>a.label.localeCompare(b.label,"es")).map(c=><option key={c.id} value={c.label}>{c.label}</option>)}</optgroup>
+                <optgroup label="Ingresos">{[...allIngresos].sort((a,b)=>a.label.localeCompare(b.label,"es")).map(c=><option key={c.id} value={c.label}>{c.label}</option>)}</optgroup></select></div>
           <div className="field full"><label>Notas</label><input value={form.notes} onChange={e=>set("notes",e.target.value)} placeholder="Opcional..."/></div>
         </div>
         {isEdit&&form.category&&form.category!==origCat&&(
@@ -1625,8 +1625,8 @@ function GroupCatSelector({allItems,suggestedIdx,onApply,onSkip}){
       <select value={sel} onChange={e=>setSel(e.target.value)}
         style={{background:"var(--s2)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"6px 10px",fontSize:12,fontFamily:"var(--ff)",outline:"none",minWidth:200}}>
         <option value="">Seleccionar categoría...</option>
-        <optgroup label="Gastos">{allItems.filter(i=>i.fuente!=="Ingresos").map((c,i)=><option key={c.id} value={allItems.indexOf(c)}>{c.label} ({c.fuente})</option>)}</optgroup>
-        <optgroup label="Ingresos">{allItems.filter(i=>i.fuente==="Ingresos").map(c=><option key={c.id} value={allItems.indexOf(c)}>{c.label}</option>)}</optgroup>
+        <optgroup label="Gastos">{[...allItems.filter(i=>i.fuente!=="Ingresos")].sort((a,b)=>a.label.localeCompare(b.label,"es")).map(c=><option key={c.id} value={allItems.indexOf(c)}>{c.label} ({c.fuente})</option>)}</optgroup>
+        <optgroup label="Ingresos">{[...allItems.filter(i=>i.fuente==="Ingresos")].sort((a,b)=>a.label.localeCompare(b.label,"es")).map(c=><option key={c.id} value={allItems.indexOf(c)}>{c.label}</option>)}</optgroup>
       </select>
       <label style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"var(--muted)",cursor:"pointer"}}>
         <input type="checkbox" checked={createRule} onChange={e=>setCreateRule(e.target.checked)}/>
@@ -1704,8 +1704,8 @@ function SplitModal({tx,structure,onClose,onSave}){
                 <label>Categoría</label>
                 <select value={pt.category} onChange={e=>setPartField(pt.id,"category",e.target.value)}>
                   <option value="">Sin categoría</option>
-                  <optgroup label="Gastos">{allGastos.map(c=><option key={c.id} value={c.label}>{c.label}</option>)}</optgroup>
-                  <optgroup label="Ingresos">{allIngresos.map(c=><option key={c.id} value={c.label}>{c.label}</option>)}</optgroup>
+                  <optgroup label="Gastos">{[...allGastos].sort((a,b)=>a.label.localeCompare(b.label,"es")).map(c=><option key={c.id} value={c.label}>{c.label}</option>)}</optgroup>
+                  <optgroup label="Ingresos">{[...allIngresos].sort((a,b)=>a.label.localeCompare(b.label,"es")).map(c=><option key={c.id} value={c.label}>{c.label}</option>)}</optgroup>
                 </select>
               </div>
             </div>
