@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback } from "react";
 
 const LS = {
@@ -598,7 +597,7 @@ export default function App() {
         </nav>
         <main className="main">
           {classifying&&<div className="classifying-banner"><span className="spin">⟳</span><span>Clasificando con IA... {classifyProgress}%</span><div style={{flex:1}}><div className="progress-bar"><div className="progress-fill" style={{width:`${classifyProgress}%`,background:"var(--blue)"}}/></div></div></div>}
-          {tab==="dashboard"&&<Dashboard filteredTxs={filteredTxs} income={income} expense={expense} source={source} selMonth={selMonth} periodLabel={periodLabel} transactions={transactions} saldosIniciales={saldosIniciales} ahorro={ahorro} activeMonths={activeMonths} setTab={setTab}/>}
+          {tab==="dashboard"&&<Dashboard filteredTxs={filteredTxs} income={income} expense={expense} source={source} selMonth={selMonth} periodLabel={periodLabel} transactions={transactions} saldosIniciales={saldosIniciales} ahorro={ahorro} activeMonths={activeMonths} structure={structure} setTab={setTab}/>}
           {tab==="transactions"&&<Transactions filteredTxs={filteredTxs} source={source} periodLabel={periodLabel} structure={structure} onAdd={()=>setModal("add")} onEdit={tx=>{setEditTx(tx);setModal("tx");}} onSplit={tx=>{setSplitTx(tx);setModal("split");}} onUpdateCategory={updateTxCategory}/>}
           {tab==="comparison"&&<Comparison transactions={transactions} budgets={budgets} selMonth={selMonth} periodMode={periodMode} activeMonths={activeMonths} periodLabel={periodLabel} source={source} structure={structure}/>}
           {tab==="budgets"&&<Budgets budgets={budgets} setBudgets={setBudgets} selMonth={selMonth} periodMode={periodMode} activeMonths={activeMonths} periodLabel={periodLabel} monthTxs={transactions.filter(t=>activeMonths.includes(t.date?.slice(0,7)))} showToast={showToast} structure={structure}/>}
@@ -618,7 +617,7 @@ export default function App() {
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
-function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,transactions,saldosIniciales,ahorro,activeMonths,setTab}){
+function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,transactions,saldosIniciales,ahorro,activeMonths,structure,setTab}){
   const balance=income-expense;
   const [y,m]=selMonth.split("-");
 
