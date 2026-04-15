@@ -102,8 +102,8 @@ const GASTOS_FIJOS = new Set([
 // Get all expense items classified as fixed or variable
 function getConsolidatedGastos(structure) {
   const allItems = structure.gastos.flatMap(f => f.grupos.flatMap(g => g.items));
-  const fijos = allItems.filter(i => GASTOS_FIJOS.has(i.label));
-  const variables = allItems.filter(i => !GASTOS_FIJOS.has(i.label));
+  const fijos = allItems.filter(i => GASTOS_FIJOS.has(i.label)).sort((a,b)=>a.label.localeCompare(b.label,"es"));
+  const variables = allItems.filter(i => !GASTOS_FIJOS.has(i.label)).sort((a,b)=>a.label.localeCompare(b.label,"es"));
   return { fijos, variables };
 }
 
@@ -1116,7 +1116,7 @@ function StructureEditor({structure,setStructure,showToast}){
 
   const renderIngresosBlock=()=>{
     const isOpen=open==="ing";
-    const allIng=structure.ingresos.flatMap(g=>g.items);
+    const allIng=structure.ingresos.flatMap(g=>g.items).sort((a,b)=>a.label.localeCompare(b.label,'es'));
     return(<div style={{marginBottom:8}}>
       <div className="acc-hdr" onClick={()=>setOpen(isOpen?null:"ing")}>
         <span style={{fontWeight:600,fontSize:13,color:"var(--green)"}}>Ingresos</span>
