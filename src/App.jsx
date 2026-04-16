@@ -1252,6 +1252,7 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
     setProcessing(true);setPreview([]);
     try{
       const ext=file.name.split(".").pop().toLowerCase();
+      console.log("processFile: name=",file.name,"ext=",ext,"previewSrc=",previewSrc);
       let raw=[];
       if(ext==="csv"){
         raw=parseCSV(await file.text());
@@ -1266,6 +1267,7 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
         // Use account name to determine format
         const isBBVATP = previewSrc==="BBVA Tarjeta Prepago";
         const isBBVA = previewSrc==="BBVA";
+        console.log("xlsx parser: isBBVA=",isBBVA,"isBBVATP=",isBBVATP,"previewSrc=",previewSrc);
 
         if(isBBVA||isBBVATP){
           // BBVA: amounts stored as real JS numbers in Excel — must use raw:true
