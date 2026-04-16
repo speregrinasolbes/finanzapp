@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useCallback } from "react";
 
 const LS = {
@@ -1263,50 +1264,52 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
         const wb=read(await file.arrayBuffer());
         const ws=wb.Sheets[wb.SheetNames[0]];
 
-        // Use account name to determine format — no autodetection needed
-        const isBBVA = previewSrc==="BBVA"||previewSrc==="BBVA Tarjeta Prepago";
+        // Use account name to determine format
         const isBBVATP = previewSrc==="BBVA Tarjeta Prepago";
+        const isBBVA = previewSrc==="BBVA";
 
-        if(isBBVA){
-          // BBVA formats: amounts are real JS numbers, read raw:true
-          const rows=utils.sheet_to_json(ws,{header:1,raw:true});
-          // Find header row (row containing string "Concepto")
-          let dataStart=5; // default for BBVA
-          for(let i=0;i<Math.min(rows.length,10);i++){
-            const r=rows[i];
-            if(r&&r.some(c=>typeof c==="string"&&c.toLowerCase().includes("concepto"))){
+        if(isBBVA||isBBVATP){
+          // BBVA: amounts stored as real JS numbers in Excel — must use raw:true
+          const rowsR=utils.sheet_to_json(ws,{header:1,raw:true});
+          const rowsS=utils.sheet_to_json(ws,{header:1,raw:false});
+          // Find header row by looking for "Concepto" string
+          let dataStart=5;
+          for(let i=0;i<Math.min(rowsS.length,10);i++){
+            const r=rowsS[i];
+            if(r&&r.some(c=>String(c||"").toLowerCase().includes("concepto"))){
               dataStart=i+1; break;
             }
           }
-          raw=rows.slice(dataStart).map(r=>{
+          raw=rowsR.slice(dataStart).map((r,idx)=>{
             if(!r) return null;
-            let date,description,amount,saldo=null;
+            // Get formatted date string from rowsS
+            const rs=rowsS[dataStart+idx]||[];
             if(isBBVATP){
-              // BBVA Tarjeta Prepago: col B=Fecha, C=Concepto, D=Movimiento, E=Importe
-              if(!r[1]) return null;
-              date=parseExcelDate(r[1]);
+              // col B=Fecha, C=Concepto, D=Movimiento, E=Importe
+              if(!rs[1]) return null;
+              const date=parseExcelDate(rs[1]);
               const c1=String(r[2]||"").trim();
               const c2=String(r[3]||"").trim();
-              description=c2&&c2!==c1&&c2!=="No categorizable"?`${c1} - ${c2}`:c1;
-              amount=parseFloat(r[4]);
-              saldo=null; // BBVA Tarjeta Prepago has no saldo column
+              const description=c2&&c2!==c1&&c2!=="No categorizable"?`${c1} - ${c2}`:c1;
+              const amount=typeof r[4]==="number"?r[4]:parseFloat(r[4]);
+              if(!description||isNaN(amount)) return null;
+              return{date,description,amount};
             } else {
-              // BBVA cuenta corriente: col B=FechaValor, C=Fecha, D=Concepto, E=Movimiento, F=Importe, G=Disponible
-              if(!r[2]) return null;
-              date=parseExcelDate(r[2]);
+              // col B=FechaValor, C=Fecha, D=Concepto, E=Movimiento, F=Importe, H=Disponible
+              if(!rs[2]) return null;
+              const date=parseExcelDate(rs[2]);
               const c1=String(r[3]||"").trim();
               const c2=String(r[4]||"").trim();
-              description=c2&&c2!==c1?`${c1} - ${c2}`:c1;
-              amount=parseFloat(r[5]);
-              saldo=r[7]?parseFloat(r[7]):null; // col H = Disponible (saldo disponible)
+              const description=c2&&c2!==c1?`${c1} - ${c2}`:c1;
+              const amount=typeof r[5]==="number"?r[5]:parseFloat(r[5]);
+              const saldo=typeof r[7]==="number"?r[7]:(r[7]?parseFloat(r[7]):null);
+              if(!description||isNaN(amount)) return null;
+              return{date,description,amount,...(saldo!==null&&!isNaN(saldo)?{saldo}:{})};
             }
-            if(!description||isNaN(amount)) return null;
-            return{date,description,amount,...(saldo!==null&&!isNaN(saldo)?{saldo}:{})};
           }).filter(Boolean);
         } else {
-          // Santander / Efectivo: amounts are Spanish text "1.034,89"
+          // Santander y Efectivo: importes en texto formato español "1.034,89"
           const rows=utils.sheet_to_json(ws,{header:1,raw:false});
-          // Find header row containing "Concepto"
           let dataStart=1;
           for(let i=0;i<Math.min(rows.length,10);i++){
             const r=rows[i];
