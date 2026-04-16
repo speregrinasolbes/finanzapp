@@ -1281,7 +1281,7 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
           }
           raw=rows.slice(dataStart).map(r=>{
             if(!r) return null;
-            let date,description,amount;
+            let date,description,amount,saldo=null;
             if(isBBVATP){
               // BBVA Tarjeta Prepago: col B=Fecha, C=Concepto, D=Movimiento, E=Importe
               if(!r[1]) return null;
@@ -1290,7 +1290,7 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
               const c2=String(r[3]||"").trim();
               description=c2&&c2!==c1&&c2!=="No categorizable"?`${c1} - ${c2}`:c1;
               amount=parseFloat(r[4]);
-              saldo=r[5]?parseFloat(r[5]):null;
+              saldo=null; // BBVA Tarjeta Prepago has no saldo column
             } else {
               // BBVA cuenta corriente: col B=FechaValor, C=Fecha, D=Concepto, E=Movimiento, F=Importe, G=Disponible
               if(!r[2]) return null;
@@ -1299,7 +1299,7 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
               const c2=String(r[4]||"").trim();
               description=c2&&c2!==c1?`${c1} - ${c2}`:c1;
               amount=parseFloat(r[5]);
-              saldo=r[7]?parseFloat(r[7]):null; // col H = Disponible
+              saldo=r[7]?parseFloat(r[7]):null; // col H = Disponible (saldo disponible)
             }
             if(!description||isNaN(amount)) return null;
             return{date,description,amount,...(saldo!==null&&!isNaN(saldo)?{saldo}:{})};
