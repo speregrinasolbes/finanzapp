@@ -1246,13 +1246,15 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
   const [processing,setProcessing]=useState(false);
   const [preview,setPreview]=useState([]);
   const [previewSrc,setPreviewSrc]=useState("Santander");
+  const previewSrcRef=useRef("Santander");
   const fileRef=useRef();
 
   const processFile=async(file)=>{
     setProcessing(true);setPreview([]);
     try{
       const ext=file.name.split(".").pop().toLowerCase();
-      console.log("processFile: name=",file.name,"ext=",ext,"previewSrc=",previewSrc);
+      const currentSrc=previewSrcRef.current;
+console.log("processFile: name=",file.name,"ext=",ext,"previewSrc=",currentSrc);
       let raw=[];
       if(ext==="csv"){
         raw=parseCSV(await file.text());
@@ -1265,9 +1267,9 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
         const ws=wb.Sheets[wb.SheetNames[0]];
 
         // Use account name to determine format
-        const isBBVATP = previewSrc==="BBVA Tarjeta Prepago";
-        const isBBVA = previewSrc==="BBVA";
-        console.log("xlsx parser: isBBVA=",isBBVA,"isBBVATP=",isBBVATP,"previewSrc=",previewSrc);
+        const isBBVATP = currentSrc==="BBVA Tarjeta Prepago";
+        const isBBVA = currentSrc==="BBVA";
+        console.log("xlsx parser: isBBVA=",isBBVA,"isBBVATP=",isBBVATP,"currentSrc=",currentSrc);
 
         if(isBBVA||isBBVATP){
           // BBVA: amounts stored as real JS numbers in Excel — must use raw:true
@@ -1344,8 +1346,8 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
   };
 
   const confirm=()=>{
-    const label=`${previewSrc} · ${new Date().toLocaleDateString("es-ES")} · ${preview.length} mov.`;
-    onImport(preview.map(t=>({...t,source:previewSrc})),label);
+    const label=`${previewSrcRef.current} · ${new Date().toLocaleDateString("es-ES")} · ${preview.length} mov.`;
+    onImport(preview.map(t=>({...t,source:previewSrcRef.current})),label);
     setPreview([]);
   };
 
@@ -1357,7 +1359,7 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
         <div className="card-title">Nuevo extracto</div>
         <div className="fg" style={{marginBottom:13}}>
           <span style={{fontSize:13,fontWeight:600}}>Cuenta:</span>
-          <div className="period-tabs">{IMPORT_SOURCES.map(s=><button key={s} className={`period-tab${previewSrc===s?" active":""}`} onClick={()=>setPreviewSrc(s)}>{s}</button>)}</div>
+          <div className="period-tabs">{IMPORT_SOURCES.map(s=><button key={s} className={`period-tab${previewSrc===s?" active":""}`} onClick={()=>{setPreviewSrc(s);previewSrcRef.current=s;}}>{s}</button>)}</div>
         </div>
         <div className={`drop-zone${dragging?" drag":""}`} onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0]);}} onClick={()=>fileRef.current?.click()}>
           <input ref={fileRef} type="file" accept=".csv,.pdf,.xlsx,.xls" style={{display:"none"}} onChange={e=>e.target.files[0]&&processFile(e.target.files[0])}/>
