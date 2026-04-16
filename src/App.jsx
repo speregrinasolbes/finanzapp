@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback } from "react";
 
 const LS = {
@@ -1272,6 +1271,9 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
           // BBVA: amounts stored as real JS numbers in Excel — must use raw:true
           const rowsR=utils.sheet_to_json(ws,{header:1,raw:true});
           const rowsS=utils.sheet_to_json(ws,{header:1,raw:false});
+          console.log("BBVA DEBUG - rowsR length:",rowsR.length,"rowsS length:",rowsS.length);
+          console.log("BBVA DEBUG - first 6 rowsS:",JSON.stringify(rowsS.slice(0,6)));
+          console.log("BBVA DEBUG - first 6 rowsR:",JSON.stringify(rowsR.slice(0,6)));
           // Find header row by looking for "Concepto" string
           let dataStart=5;
           for(let i=0;i<Math.min(rowsS.length,10);i++){
@@ -1280,6 +1282,9 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
               dataStart=i+1; break;
             }
           }
+          console.log("BBVA DEBUG - dataStart:",dataStart,"isBBVATP:",isBBVATP);
+          console.log("BBVA DEBUG - first data rowR:",JSON.stringify(rowsR[dataStart]));
+          console.log("BBVA DEBUG - first data rowS:",JSON.stringify(rowsS[dataStart]));
           raw=rowsR.slice(dataStart).map((r,idx)=>{
             if(!r) return null;
             // Get formatted date string from rowsS
