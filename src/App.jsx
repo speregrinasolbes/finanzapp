@@ -1249,12 +1249,12 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
   const previewSrcRef=useRef("Santander");
   const fileRef=useRef();
 
-  const processFile=async(file)=>{
+  const processFile=async(file,srcOverride)=>{
     setProcessing(true);setPreview([]);
     try{
       const ext=file.name.split(".").pop().toLowerCase();
-      const currentSrc=previewSrcRef.current;
-console.log("processFile: name=",file.name,"ext=",ext,"previewSrc=",currentSrc);
+      const currentSrc=srcOverride||previewSrcRef.current||previewSrc;
+      console.log("processFile: name=",file.name,"ext=",ext,"currentSrc=",currentSrc,"previewSrc state=",previewSrc,"ref=",previewSrcRef.current,"override=",srcOverride);
       let raw=[];
       if(ext==="csv"){
         raw=parseCSV(await file.text());
@@ -1361,8 +1361,8 @@ console.log("processFile: name=",file.name,"ext=",ext,"previewSrc=",currentSrc);
           <span style={{fontSize:13,fontWeight:600}}>Cuenta:</span>
           <div className="period-tabs">{IMPORT_SOURCES.map(s=><button key={s} className={`period-tab${previewSrc===s?" active":""}`} onClick={()=>{setPreviewSrc(s);previewSrcRef.current=s;}}>{s}</button>)}</div>
         </div>
-        <div className={`drop-zone${dragging?" drag":""}`} onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0]);}} onClick={()=>fileRef.current?.click()}>
-          <input ref={fileRef} type="file" accept=".csv,.pdf,.xlsx,.xls" style={{display:"none"}} onChange={e=>e.target.files[0]&&processFile(e.target.files[0])}/>
+        <div className={`drop-zone${dragging?" drag":""}`} onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0],previewSrc);}} onClick={()=>fileRef.current?.click()}>
+          <input ref={fileRef} type="file" accept=".csv,.pdf,.xlsx,.xls" style={{display:"none"}} onChange={e=>e.target.files[0]&&processFile(e.target.files[0],previewSrc)}/>
           {processing?<><div style={{fontSize:32,marginBottom:10}} className="spin">⟳</div><div style={{fontSize:13,fontWeight:500}}>Leyendo archivo...</div></>
             :<><div style={{fontSize:32,marginBottom:10}}>📤</div><div style={{fontSize:14,fontWeight:600,marginBottom:4}}>Arrastra el extracto aquí o haz clic</div><div style={{fontSize:12,color:"var(--muted)"}}>PDF · CSV · Excel (.xlsx) — Extracto de: {previewSrc}</div><div style={{fontSize:11,color:"var(--hint)",marginTop:6}}>Formato Santander: col A=Fecha, C=Concepto, D=Importe</div></>}
         </div>
