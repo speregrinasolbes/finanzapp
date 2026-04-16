@@ -134,7 +134,7 @@ function applyRules(description, rules) {
   const sorted = [...rules].sort((a,b) => (b.exact?1:0)-(a.exact?1:0));
   for (const rule of sorted) {
     const kw = rule.keyword.toLowerCase();
-    if (rule.exact ? desc===kw : desc.includes(kw)) return { category: rule.category, source: rule.source };
+    if (rule.exact ? desc===kw : desc.includes(kw)) return { category: rule.category, source: rule.source==="Todas"?null:rule.source };
   }
   return null;
 }
@@ -154,7 +154,7 @@ async function classifyWithAI(transactions, structure, rules) {
   const items = getAllItems(structure);
   const catList = items.map((c,i)=>`${i}:${c.label}(${c.fuente})`).join(", ");
   const rulesHint = rules.length > 0
-    ? `\nReglas de clasificación definidas por el usuario (aplícalas con prioridad):\n${rules.map(r=>`- Si contiene "${r.keyword}" → "${r.category}" (${r.source})`).join("\n")}`
+    ? `\nReglas de clasificación definidas por el usuario (aplícalas con prioridad):\n${rules.map(r=>`- Si contiene "${r.keyword}" → "${r.category}" (${r.source==="Todas"?"todas las cuentas":r.source})`).join("\n")}`
     : "";
   const prompt = `Eres asistente de finanzas personales español. Clasifica cada transacción bancaria en la subcategoría más adecuada de esta lista:\n${catList}${rulesHint}\n\nResponde SOLO con JSON array sin markdown: [{"id":"tx_id","catIndex":número}]\n\nTransacciones:\n${transactions.map(t=>`id:${t.id}|"${t.description}"|${t.amount}€`).join("\n")}`;
   const resp = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":getApiKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})});
@@ -449,7 +449,7 @@ export default function App() {
 
   const applyRulesToTx=useCallback((tx)=>{
     const match=applyRules(tx.description,rules);
-    if(match) return {...tx,category:match.category,source:tx.source||match.source,ruleClassified:true,aiClassified:false};
+    if(match) return {...tx,category:match.category,source:tx.source||(match.source||tx.source),ruleClassified:true,aiClassified:false};
     return tx;
   },[rules]);
 
@@ -1017,7 +1017,7 @@ function Budgets({budgets,setBudgets,selMonth,periodMode,activeMonths,periodLabe
 
 // ── CRITERIOS ─────────────────────────────────────────────────────────────────
 function Rules({rules,setRules,structure,showToast}){
-  const [newKw,setNewKw]=useState("");const [newCat,setNewCat]=useState("");const [newSrc,setNewSrc]=useState("Efectivo");const [newExact,setNewExact]=useState(false);
+  const [newKw,setNewKw]=useState("");const [newCat,setNewCat]=useState("");const [newSrc,setNewSrc]=useState("Todas");const [newExact,setNewExact]=useState(false);
   const allItems=getAllItems(structure);
   const addRule=()=>{if(!newKw||!newCat)return;setRules(p=>[{id:uid(),keyword:newKw.trim(),category:newCat,source:newSrc,exact:newExact,auto:false},...p]);setNewKw("");setNewCat("");showToast("Regla añadida");};
   const deleteRule=(id)=>{setRules(p=>p.filter(r=>r.id!==id));showToast("Regla eliminada","🗑");};
@@ -1029,7 +1029,7 @@ function Rules({rules,setRules,structure,showToast}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           <div className="field"><label>Si el extracto contiene</label><input value={newKw} onChange={e=>setNewKw(e.target.value)} placeholder="Ej: MERCADONA" onKeyDown={e=>e.key==="Enter"&&addRule()}/></div>
           <div className="field"><label>Asignar a categoría</label><select value={newCat} onChange={e=>setNewCat(e.target.value)}><option value="">Seleccionar...</option>{allItems.map(i=><option key={i.id} value={i.label}>{i.label} ({i.fuente})</option>)}</select></div>
-          <div className="field"><label>Cuenta</label><select value={newSrc} onChange={e=>setNewSrc(e.target.value)}>{SOURCES.map(s=><option key={s} value={s}>{s}</option>)}</select></div>
+          <div className="field"><label>Cuenta</label><select value={newSrc} onChange={e=>setNewSrc(e.target.value)}><option value="Todas">Todas las cuentas</option>{SOURCES.map(s=><option key={s} value={s}>{s}</option>)}</select></div>
           <div className="field"><label>Tipo</label><div className="period-tabs" style={{marginTop:2}}><button className={`period-tab${!newExact?" active":""}`} onClick={()=>setNewExact(false)}>Fragmento</button><button className={`period-tab${newExact?" active":""}`} onClick={()=>setNewExact(true)}>Exacta</button></div></div>
         </div>
         <button className="btn btn-p btn-sm" onClick={addRule} disabled={!newKw||!newCat}>+ Añadir regla</button>
@@ -1045,7 +1045,7 @@ function Rules({rules,setRules,structure,showToast}){
                 <span className={`badge ${r.exact?"badge-blue":"badge-gray"}`}>{r.exact?"Exacta":"Fragmento"}</span>
                 {r.auto&&<span className="badge badge-green">⚡ Auto-aprendida</span>}
               </div>
-              <div style={{fontSize:11,color:"var(--muted)"}}>Cuenta: {r.source}</div>
+              <div style={{fontSize:11,color:"var(--muted)"}}>Cuenta: {r.source==="Todas"?"Todas las cuentas":r.source}</div>
             </div>
             <button className="btn btn-d btn-sm" onClick={()=>deleteRule(r.id)}>✕ Eliminar</button>
           </div>
