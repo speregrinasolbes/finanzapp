@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useCallback } from "react";
 
 const LS = {
@@ -605,7 +606,7 @@ export default function App() {
           {tab==="bulk"&&<BulkClassify transactions={transactions} setTransactions={setTransactions} structure={structure} rules={rules} setRules={setRules} showToast={showToast}/>}
           {tab==="rules"&&<Rules rules={rules} setRules={setRules} structure={structure} showToast={showToast}/>}
           {tab==="structure"&&<StructureEditor structure={structure} setStructure={setStructure} showToast={showToast}/>}
-          {tab==="import"&&<Import onImport={importTxs} showToast={showToast} batches={batches} onDeleteBatch={deleteBatch}/>}
+          {tab==="import"&&<Import onImport={importTxs} showToast={showToast} batches={batches} onDeleteBatch={deleteBatch} transactions={transactions} onEditTx={tx=>{setEditTx(tx);setModal("tx");}} onSplitTx={tx=>{setSplitTx(tx);setModal("split");}} structure={structure}/>}
         </main>
       </div>
       {modal==="add"&&<TxModal structure={structure} onClose={()=>setModal(null)} onSave={addTx}/>}
@@ -1171,7 +1172,75 @@ function StructureEditor({structure,setStructure,showToast}){
 function NewBloqueForm({onAdd}){const [label,setLabel]=useState("");const [fuente,setFuente]=useState("Efectivo");return(<div style={{display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap"}}><div className="field" style={{flex:1}}><label>Nombre del bloque</label><input value={label} onChange={e=>setLabel(e.target.value)} placeholder="Ej: Gastos Empresa"/></div><div className="field"><label>Cuenta</label><select value={fuente} onChange={e=>setFuente(e.target.value)}>{SOURCES.map(s=><option key={s} value={s}>{s}</option>)}</select></div><button className="btn btn-p" onClick={()=>{if(label.trim()){onAdd(label.trim(),fuente);setLabel("");}}}>Crear bloque</button></div>);}
 
 // ── IMPORTAR ──────────────────────────────────────────────────────────────────
-function Import({onImport,showToast,batches,onDeleteBatch}){
+
+// ── BATCH LIST ────────────────────────────────────────────────────────────────
+function BatchList({batches,transactions,onDeleteBatch,onEditTx,onSplitTx,structure}){
+  const [openBatch,setOpenBatch]=useState(null);
+  const [search,setSearch]=useState("");
+  const srcClass=(s)=>({"Efectivo":"src-ef","Efectivo Ahorro":"src-ef-ah","Santander":"src-san","Santander Ahorro":"src-san2","BBVA":"src-bbva","BBVA Tarjeta Prepago":"src-bbva-tp"})[s]||"src-ef";
+
+  return(<>
+    {batches.map(b=>{
+      const batchTxs=transactions.filter(t=>t.batchId===b.id);
+      const isOpen=openBatch===b.id;
+      const filtered=batchTxs.filter(t=>!search||t.description?.toLowerCase().includes(search.toLowerCase())||t.category?.toLowerCase().includes(search.toLowerCase()));
+      return(
+        <div key={b.id} style={{borderBottom:"1px solid var(--border)",paddingBottom:isOpen?12:0,marginBottom:isOpen?8:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",cursor:"pointer"}} onClick={()=>setOpenBatch(isOpen?null:b.id)}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,fontWeight:600}}>{b.label}</div>
+              <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{b.date} · {b.count} movimientos</div>
+            </div>
+            <button className="btn btn-o btn-sm" onClick={e=>{e.stopPropagation();setOpenBatch(isOpen?null:b.id);}}>
+              {isOpen?"▲ Cerrar":"▼ Ver movimientos"}
+            </button>
+            <button className="btn btn-d btn-sm" onClick={e=>{e.stopPropagation();if(window.confirm(`¿Eliminar esta importación y sus ${b.count} movimientos?`))onDeleteBatch(b.id);}}>🗑 Eliminar</button>
+          </div>
+          {isOpen&&<div style={{marginTop:6}}>
+            <input className="sbar" placeholder="🔍 Buscar en esta importación..." value={search} onChange={e=>setSearch(e.target.value)} style={{marginBottom:10,width:"100%",boxSizing:"border-box"}}/>
+            <div style={{overflowX:"auto",maxHeight:420,overflowY:"auto"}}>
+              <table className="tx-table">
+                <thead><tr>
+                  <th>Fecha</th><th>Concepto</th><th>Cuenta</th>
+                  <th>Categoría</th>
+                  <th className="right">Importe</th><th></th>
+                </tr></thead>
+                <tbody>
+                  {filtered.map(tx=>{
+                    const isIncome=tx.amount>0;
+                    const allGastos=structure.gastos.flatMap(f=>f.grupos.flatMap(g=>g.items));
+                    const allIngresos=structure.ingresos.flatMap(g=>g.items);
+                    return(
+                      <tr key={tx.id}>
+                        <td style={{color:"var(--muted)",fontSize:12,whiteSpace:"nowrap"}}>{fmtDate(tx.date)}</td>
+                        <td className="tx-desc-cell" style={{maxWidth:200}} title={tx.description}>{tx.description}</td>
+                        <td>{tx.source&&<span className={`src-chip ${srcClass(tx.source)}`}>{tx.source}</span>}</td>
+                        <td style={{fontSize:12,color:tx.category?"var(--text)":"var(--muted)"}}>{tx.category||"Sin clasificar"}</td>
+                        <td className={`tx-amt-cell ${isIncome?"g":"r"}`}>{isIncome?"+":"-"}{fmt(Math.abs(tx.amount))}</td>
+                        <td>
+                          <div style={{display:"flex",gap:3}}>
+                            <button className="btn btn-o btn-sm" style={{padding:"3px 7px",fontSize:11}} onClick={()=>onEditTx(tx)} title="Editar">✎</button>
+                            <button className="btn btn-o btn-sm" style={{padding:"3px 7px",fontSize:11}} onClick={()=>onSplitTx(tx)} title="Dividir">⊕</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {filtered.length===0&&<div className="empty">Sin resultados</div>}
+            <div style={{fontSize:11,color:"var(--muted)",marginTop:8,textAlign:"right"}}>
+              {filtered.length} de {batchTxs.length} movimientos
+            </div>
+          </div>}
+        </div>
+      );
+    })}
+  </>);
+}
+
+function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,onSplitTx,structure}){
   const [dragging,setDragging]=useState(false);
   const [processing,setProcessing]=useState(false);
   const [preview,setPreview]=useState([]);
@@ -1315,15 +1384,7 @@ function Import({onImport,showToast,batches,onDeleteBatch}){
       {batches.length>0&&(
         <div className="card">
           <div className="card-title">Importaciones realizadas</div>
-          {batches.map(b=>(
-            <div key={b.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:"1px solid var(--border)"}}>
-              <div style={{flex:1}}>
-                <div style={{fontSize:13,fontWeight:600}}>{b.label}</div>
-                <div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>{b.date} · {b.count} movimientos</div>
-              </div>
-              <button className="btn btn-d btn-sm" onClick={()=>{if(window.confirm(`¿Eliminar esta importación y sus ${b.count} movimientos?`))onDeleteBatch(b.id);}}>🗑 Eliminar importación</button>
-            </div>
-          ))}
+          <BatchList batches={batches} transactions={transactions} onDeleteBatch={onDeleteBatch} onEditTx={onEditTx} onSplitTx={onSplitTx} structure={structure}/>
         </div>
       )}
     </div>
