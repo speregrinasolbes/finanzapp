@@ -1271,9 +1271,6 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
           // BBVA: amounts stored as real JS numbers in Excel — must use raw:true
           const rowsR=utils.sheet_to_json(ws,{header:1,raw:true});
           const rowsS=utils.sheet_to_json(ws,{header:1,raw:false});
-          console.log("BBVA DEBUG - rowsR length:",rowsR.length,"rowsS length:",rowsS.length);
-          console.log("BBVA DEBUG - first 6 rowsS:",JSON.stringify(rowsS.slice(0,6)));
-          console.log("BBVA DEBUG - first 6 rowsR:",JSON.stringify(rowsR.slice(0,6)));
           // Find header row by looking for "Concepto" string
           let dataStart=5;
           for(let i=0;i<Math.min(rowsS.length,10);i++){
@@ -1282,32 +1279,29 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
               dataStart=i+1; break;
             }
           }
-          console.log("BBVA DEBUG - dataStart:",dataStart,"isBBVATP:",isBBVATP);
-          console.log("BBVA DEBUG - first data rowR:",JSON.stringify(rowsR[dataStart]));
-          console.log("BBVA DEBUG - first data rowS:",JSON.stringify(rowsS[dataStart]));
           raw=rowsR.slice(dataStart).map((r,idx)=>{
             if(!r) return null;
             // Get formatted date string from rowsS
             const rs=rowsS[dataStart+idx]||[];
             if(isBBVATP){
-              // col B=Fecha, C=Concepto, D=Movimiento, E=Importe
+              // col 0=Fecha, 1=Concepto, 2=Movimiento, 3=Importe
+              if(!rs[0]) return null;
+              const date=parseExcelDate(rs[0]);
+              const c1=String(r[1]||"").trim();
+              const c2=String(r[2]||"").trim();
+              const description=c2&&c2!==c1&&c2!=="No categorizable"?`${c1} - ${c2}`:c1;
+              const amount=typeof r[3]==="number"?r[3]:parseFloat(r[3]);
+              if(!description||isNaN(amount)) return null;
+              return{date,description,amount};
+            } else {
+              // col 0=FechaValor, 1=Fecha, 2=Concepto, 3=Movimiento, 4=Importe, 6=Disponible
               if(!rs[1]) return null;
               const date=parseExcelDate(rs[1]);
               const c1=String(r[2]||"").trim();
               const c2=String(r[3]||"").trim();
-              const description=c2&&c2!==c1&&c2!=="No categorizable"?`${c1} - ${c2}`:c1;
-              const amount=typeof r[4]==="number"?r[4]:parseFloat(r[4]);
-              if(!description||isNaN(amount)) return null;
-              return{date,description,amount};
-            } else {
-              // col B=FechaValor, C=Fecha, D=Concepto, E=Movimiento, F=Importe, H=Disponible
-              if(!rs[2]) return null;
-              const date=parseExcelDate(rs[2]);
-              const c1=String(r[3]||"").trim();
-              const c2=String(r[4]||"").trim();
               const description=c2&&c2!==c1?`${c1} - ${c2}`:c1;
-              const amount=typeof r[5]==="number"?r[5]:parseFloat(r[5]);
-              const saldo=typeof r[7]==="number"?r[7]:(r[7]?parseFloat(r[7]):null);
+              const amount=typeof r[4]==="number"?r[4]:parseFloat(r[4]);
+              const saldo=typeof r[6]==="number"?r[6]:(r[6]?parseFloat(r[6]):null);
               if(!description||isNaN(amount)) return null;
               return{date,description,amount,...(saldo!==null&&!isNaN(saldo)?{saldo}:{})};
             }
