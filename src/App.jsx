@@ -1285,12 +1285,14 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
             const rs=rowsS[dataStart+idx]||[];
             if(isBBVATP){
               // col 0=Fecha, 1=Concepto, 2=Movimiento, 3=Importe
+              if(idx===0) console.log("TP DEBUG rowR:",JSON.stringify(r),"rowS:",JSON.stringify(rs));
               if(!rs[0]) return null;
               const date=parseExcelDate(rs[0]);
               const c1=String(r[1]||"").trim();
               const c2=String(r[2]||"").trim();
               const description=c2&&c2!==c1&&c2!=="No categorizable"?`${c1} - ${c2}`:c1;
               const amount=typeof r[3]==="number"?r[3]:parseFloat(r[3]);
+              if(idx===0) console.log("TP DEBUG date:",date,"desc:",description,"amount:",amount);
               if(!description||isNaN(amount)) return null;
               return{date,description,amount};
             } else {
