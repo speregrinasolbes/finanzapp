@@ -1203,7 +1203,8 @@ function BatchList({batches,transactions,onDeleteBatch,onEditTx,onSplitTx,struct
                 <thead><tr>
                   <th>Fecha</th><th>Concepto</th><th>Cuenta</th>
                   <th>Categoría</th>
-                  <th className="right">Importe</th><th></th>
+                  <th className="right">Importe</th>
+                  <th className="right">Saldo</th><th></th>
                 </tr></thead>
                 <tbody>
                   {filtered.map(tx=>{
@@ -1217,6 +1218,7 @@ function BatchList({batches,transactions,onDeleteBatch,onEditTx,onSplitTx,struct
                         <td>{tx.source&&<span className={`src-chip ${srcClass(tx.source)}`}>{tx.source}</span>}</td>
                         <td style={{fontSize:12,color:tx.category?"var(--text)":"var(--muted)"}}>{tx.category||"Sin clasificar"}</td>
                         <td className={`tx-amt-cell ${isIncome?"g":"r"}`}>{isIncome?"+":"-"}{fmt(Math.abs(tx.amount))}</td>
+                        <td style={{textAlign:"right",fontFamily:"var(--fd)",fontSize:12,color:"var(--muted)",whiteSpace:"nowrap"}}>{tx.saldo!=null?fmt(tx.saldo):"—"}</td>
                         <td>
                           <div style={{display:"flex",gap:3}}>
                             <button className="btn btn-o btn-sm" style={{padding:"3px 7px",fontSize:11}} onClick={()=>onEditTx(tx)} title="Editar">✎</button>
@@ -1288,17 +1290,19 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
               const c2=String(r[3]||"").trim();
               description=c2&&c2!==c1&&c2!=="No categorizable"?`${c1} - ${c2}`:c1;
               amount=parseFloat(r[4]);
+              saldo=r[5]?parseFloat(r[5]):null;
             } else {
-              // BBVA cuenta corriente: col B=FechaValor, C=Fecha, D=Concepto, E=Movimiento, F=Importe
+              // BBVA cuenta corriente: col B=FechaValor, C=Fecha, D=Concepto, E=Movimiento, F=Importe, G=Disponible
               if(!r[2]) return null;
               date=parseExcelDate(r[2]);
               const c1=String(r[3]||"").trim();
               const c2=String(r[4]||"").trim();
               description=c2&&c2!==c1?`${c1} - ${c2}`:c1;
               amount=parseFloat(r[5]);
+              saldo=r[7]?parseFloat(r[7]):null; // col H = Disponible
             }
             if(!description||isNaN(amount)) return null;
-            return{date,description,amount};
+            return{date,description,amount,...(saldo!==null&&!isNaN(saldo)?{saldo}:{})};
           }).filter(Boolean);
         } else {
           // Santander / Efectivo: amounts are Spanish text "1.034,89"
@@ -1316,8 +1320,9 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
             const date=parseExcelDate(r[0]);
             const description=String(r[2]||"").trim();
             const amount=parseSpanishNumber(r[3]);
+            const saldo=r[4]?parseSpanishNumber(r[4]):null;
             if(isNaN(amount)||!description) return null;
-            return{date,description,amount};
+            return{date,description,amount,...(saldo!==null&&!isNaN(saldo)?{saldo}:{})};
           }).filter(Boolean);
         }
       } else {
