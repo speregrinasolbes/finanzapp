@@ -459,10 +459,11 @@ export default function App() {
   const [classifyProgress,setClassifyProgress]=useState(0);
   const [showApiModal,setShowApiModal]=useState(!getApiKey());
 
-  // Load from Supabase on mount — overrides localStorage if remote data exists
+  // Load from Supabase on mount — only overrides local if remote has actual data
   useEffect(()=>{
     sbLoad().then(remote=>{
-      if(!remote) return;
+      // Only load from remote if it has transactions (not empty/fresh DB)
+      if(!remote || !remote.transactions || remote.transactions.length===0) return;
       isRemoteLoad.current=true;
       if(remote.transactions) setTransactions(remote.transactions);
       if(remote.budgets) setBudgets(remote.budgets);
