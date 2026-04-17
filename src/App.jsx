@@ -7,6 +7,30 @@ const LS = {
 const getApiKey = () => localStorage.getItem("finanzapp_apikey") || "";
 const saveApiKey = (k) => localStorage.setItem("finanzapp_apikey", k);
 
+// ── Supabase sync ─────────────────────────────────────────────────────────────
+const SB_URL = "https://jtegidrmrptgeuzdcuat.supabase.co";
+const SB_KEY = "sb_publishable_9A_GiUz4UqTvQcooRzCd7w_7XzN3zuT";
+const SB_HDR = { "Content-Type":"application/json", "apikey":SB_KEY, "Authorization":`Bearer ${SB_KEY}` };
+
+async function sbLoad() {
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/finanzapp_data?id=eq.main&select=data`, {headers:SB_HDR});
+    if (!r.ok) return null;
+    const rows = await r.json();
+    return rows?.[0]?.data || null;
+  } catch { return null; }
+}
+
+async function sbSave(data) {
+  try {
+    await fetch(`${SB_URL}/rest/v1/finanzapp_data?id=eq.main`, {
+      method: "PATCH",
+      headers: { ...SB_HDR, "Prefer":"return=minimal" },
+      body: JSON.stringify({ data, updated_at: new Date().toISOString() }),
+    });
+  } catch {}
+}
+
 // Parse Spanish number format: "1.034,89" → 1034.89
 function parseSpanishNumber(val) {
   if (val === null || val === undefined || val === "") return NaN;
@@ -416,14 +440,12 @@ export default function App() {
   const [budgets,setBudgets]=useState(()=>LS.get("fin_budgets",{}));
   const [structure,setStructure]=useState(()=>LS.get("fin_structure",DEFAULT_STRUCTURE));
   const [rules,setRules]=useState(()=>LS.get("fin_rules",[]));
-  const [batches,setBatches]=useState(()=>LS.get("fin_batches",[])); // [{id,label,date,count}]
-  // Saldos iniciales por fuente {source: amount}
+  const [batches,setBatches]=useState(()=>LS.get("fin_batches",[]));
   const [saldosIniciales,setSaldosIniciales]=useState(()=>LS.get("fin_saldos",{}));
-  // Ahorro: pensiones (valor actual) y fondo (historial)
-  const [ahorro,setAhorro]=useState(()=>LS.get("fin_ahorro",{
-    pensionMar: 0, pensionSalva: 0,
-    fondo: [] // [{id, date, valor, nota}]
-  }));
+  const [ahorro,setAhorro]=useState(()=>LS.get("fin_ahorro",{pensionMar:0,pensionSalva:0,fondo:[]}));
+  const [syncStatus,setSyncStatus]=useState("idle"); // idle | saving | saved | error
+  const sbSaveTimer=useRef(null);
+  const isRemoteLoad=useRef(false);
   const [selMonth,setSelMonth]=useState(currentYM);
   // Shared period filter (used by Dashboard, Movimientos, Presupuestos, Ppto vs Real)
   const [periodMode,setPeriodMode]=useState("range");
@@ -437,20 +459,51 @@ export default function App() {
   const [classifyProgress,setClassifyProgress]=useState(0);
   const [showApiModal,setShowApiModal]=useState(!getApiKey());
 
-  useEffect(()=>{LS.set("fin_txs",transactions);},[transactions]);
-  // Update rangeTo to last month with transactions whenever transactions change
+  // Load from Supabase on mount — overrides localStorage if remote data exists
+  useEffect(()=>{
+    sbLoad().then(remote=>{
+      if(!remote) return;
+      isRemoteLoad.current=true;
+      if(remote.transactions) setTransactions(remote.transactions);
+      if(remote.budgets) setBudgets(remote.budgets);
+      if(remote.structure) setStructure(remote.structure);
+      if(remote.rules) setRules(remote.rules);
+      if(remote.batches) setBatches(remote.batches);
+      if(remote.saldosIniciales) setSaldosIniciales(remote.saldosIniciales);
+      if(remote.ahorro) setAhorro(remote.ahorro);
+      setSyncStatus("saved");
+    });
+  },[]);
+
+  // Debounced save to Supabase + immediate save to localStorage
+  const triggerSave=useCallback((key,val,all)=>{
+    LS.set(key,val);
+    if(isRemoteLoad.current===true) isRemoteLoad.current=false;
+    if(sbSaveTimer.current) clearTimeout(sbSaveTimer.current);
+    setSyncStatus("saving");
+    sbSaveTimer.current=setTimeout(()=>{
+      sbSave(all()).then(()=>setSyncStatus("saved")).catch(()=>setSyncStatus("error"));
+    },2000);
+  },[]);
+
+  const getAllData=useCallback(()=>({
+    transactions,budgets,structure,rules,batches,saldosIniciales,ahorro
+  }),[transactions,budgets,structure,rules,batches,saldosIniciales,ahorro]);
+
+  useEffect(()=>{if(!isRemoteLoad.current)triggerSave("fin_txs",transactions,getAllData);},[transactions]);
+  // Update rangeTo to last month with transactions
   useEffect(()=>{
     if(transactions.length===0) return;
     const months=transactions.map(t=>t.date?.slice(0,7)).filter(Boolean).sort();
     const lastMonth=months[months.length-1];
     if(lastMonth) setRangeTo(lastMonth);
   },[transactions]);
-  useEffect(()=>{LS.set("fin_budgets",budgets);},[budgets]);
-  useEffect(()=>{LS.set("fin_structure",structure);},[structure]);
-  useEffect(()=>{LS.set("fin_rules",rules);},[rules]);
-  useEffect(()=>{LS.set("fin_batches",batches);},[batches]);
-  useEffect(()=>{LS.set("fin_saldos",saldosIniciales);},[saldosIniciales]);
-  useEffect(()=>{LS.set("fin_ahorro",ahorro);},[ahorro]);
+  useEffect(()=>{if(!isRemoteLoad.current)triggerSave("fin_budgets",budgets,getAllData);},[budgets]);
+  useEffect(()=>{if(!isRemoteLoad.current)triggerSave("fin_structure",structure,getAllData);},[structure]);
+  useEffect(()=>{if(!isRemoteLoad.current)triggerSave("fin_rules",rules,getAllData);},[rules]);
+  useEffect(()=>{if(!isRemoteLoad.current)triggerSave("fin_batches",batches,getAllData);},[batches]);
+  useEffect(()=>{if(!isRemoteLoad.current)triggerSave("fin_saldos",saldosIniciales,getAllData);},[saldosIniciales]);
+  useEffect(()=>{if(!isRemoteLoad.current)triggerSave("fin_ahorro",ahorro,getAllData);},[ahorro]);
 
   const showToast=(msg,icon="✓")=>{setToast({msg,icon});setTimeout(()=>setToast(null),4000);};
 
@@ -587,7 +640,17 @@ export default function App() {
         <header className="hdr">
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div className="hdr-icon">€</div>
-            <div><div className="hdr-name">FinanzApp</div><div className="hdr-sub">Gastos domésticos</div></div>
+            <div>
+              <div className="hdr-name">FinanzApp</div>
+              <div className="hdr-sub" style={{display:"flex",alignItems:"center",gap:5}}>
+                Gastos domésticos
+                <span style={{fontSize:10,opacity:.8}}>
+                  {syncStatus==="saving"&&"⟳ Guardando..."}
+                  {syncStatus==="saved"&&"✓ Sync"}
+                  {syncStatus==="error"&&"✕ Error sync"}
+                </span>
+              </div>
+            </div>
           </div>
           <div className="hdr-right">
             <div className="src-tabs">
