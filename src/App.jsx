@@ -746,74 +746,74 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
             </>);
           })()}
         </div>
-        <div className="card">
-          <div className="card-title">Disponibilidad por cuenta</div>
-          {(()=>{
-            const saldos=BANK_SOURCES.map(s=>{
-              const saldoInicial=saldosIniciales[s]||0;
-              const movInc=transactions.filter(t=>t.source===s&&t.amount>0).reduce((a,t)=>a+t.amount,0);
-              const movExp=transactions.filter(t=>t.source===s&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0);
-              return{s,saldoInicial,movInc,movExp,saldoActual:saldoInicial+movInc-movExp};
-            });
-            const totalDisponible=saldos.reduce((a,x)=>a+x.saldoActual,0);
-            return(<>
-              {saldos.map(({s,saldoInicial,movInc,movExp,saldoActual},i)=>(
-                <div key={s} style={{marginBottom:14}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,alignItems:"center"}}>
-                    <span style={{fontSize:13,fontWeight:600,color:srcColor(s),background:srcBg(s),padding:"2px 9px",borderRadius:20}}>{s}</span>
-                    <span style={{fontWeight:700,fontSize:14,color:saldoActual>=0?"var(--green)":"var(--red)"}}>{fmt(saldoActual)}</span>
-                  </div>
-                  {saldosIniciales[s]!==undefined&&<div style={{fontSize:11,color:"var(--muted)",display:"flex",gap:12}}>
-                    <span>Inicial: {fmt(saldoInicial)}</span>
-                    <span style={{color:"var(--green)"}}>+{fmt(movInc)}</span>
-                    <span style={{color:"var(--red)"}}>-{fmt(movExp)}</span>
-                  </div>}
-                </div>
-              ))}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"2px solid var(--border)",paddingTop:10,marginTop:4}}>
-                <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>Total disponible</span>
-                <span style={{fontFamily:"var(--fd)",fontSize:18,fontWeight:700,color:totalDisponible>=0?"var(--green)":"var(--red)"}}>{fmt(totalDisponible)}</span>
-              </div>
-            </>);
-          })()}
-          {ahorro&&<div style={{marginTop:14,paddingTop:12,borderTop:"1px solid var(--border)"}}>
-            <div style={{fontSize:11,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Ahorro</div>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div className="card">
+            <div className="card-title">Disponibilidad por cuenta</div>
             {(()=>{
-              const efAhSaldo=(saldosIniciales["Efectivo Ahorro"]||0)+transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount>0).reduce((a,t)=>a+t.amount,0)-transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0);
-              return efAhSaldo!==0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
-                <span style={{color:"#7e22ce",fontWeight:600}}>Efectivo Ahorro</span>
-                <span style={{fontWeight:600,color:efAhSaldo>=0?"var(--green)":"var(--red)"}}>{fmt(efAhSaldo)}</span>
-              </div>;
+              const saldos=BANK_SOURCES.map(s=>{
+                const saldoInicial=saldosIniciales[s]||0;
+                const movInc=transactions.filter(t=>t.source===s&&t.amount>0).reduce((a,t)=>a+t.amount,0);
+                const movExp=transactions.filter(t=>t.source===s&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0);
+                return{s,saldoInicial,movInc,movExp,saldoActual:saldoInicial+movInc-movExp};
+              });
+              const totalDisponible=saldos.reduce((a,x)=>a+x.saldoActual,0);
+              return(<>
+                {saldos.map(({s,saldoInicial,movInc,movExp,saldoActual},i)=>(
+                  <div key={s} style={{marginBottom:14}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,alignItems:"center"}}>
+                      <span style={{fontSize:13,fontWeight:600,color:srcColor(s),background:srcBg(s),padding:"2px 9px",borderRadius:20}}>{s}</span>
+                      <span style={{fontWeight:700,fontSize:14,color:saldoActual>=0?"var(--green)":"var(--red)"}}>{fmt(saldoActual)}</span>
+                    </div>
+                    {saldosIniciales[s]!==undefined&&<div style={{fontSize:11,color:"var(--muted)",display:"flex",gap:12}}>
+                      <span>Inicial: {fmt(saldoInicial)}</span>
+                      <span style={{color:"var(--green)"}}>+{fmt(movInc)}</span>
+                      <span style={{color:"var(--red)"}}>-{fmt(movExp)}</span>
+                    </div>}
+                  </div>
+                ))}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"2px solid var(--border)",paddingTop:10,marginTop:4}}>
+                  <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>Total disponible</span>
+                  <span style={{fontFamily:"var(--fd)",fontSize:18,fontWeight:700,color:totalDisponible>=0?"var(--green)":"var(--red)"}}>{fmt(totalDisponible)}</span>
+                </div>
+              </>);
             })()}
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
-              <span>Plan Pensiones Mar</span><span style={{fontWeight:600}}>{fmt(ahorro.pensionMar||0)}</span>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
-              <span>Plan Pensiones Salva</span><span style={{fontWeight:600}}>{fmt(ahorro.pensionSalva||0)}</span>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6}}>
-              <span>Fondo Inversión Salva</span>
-              <span style={{fontWeight:600}}>{ahorro.fondo?.length>0?fmt(ahorro.fondo[0].valor):fmt(0)}</span>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,borderTop:"1px solid var(--border)",paddingTop:6}}>
-              <span>Total Ahorro</span>
-              <span style={{color:"var(--green)"}}>{fmt((saldosIniciales["Efectivo Ahorro"]||0)+transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount>0).reduce((a,t)=>a+t.amount,0)-transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0)+(ahorro.pensionMar||0)+(ahorro.pensionSalva||0)+(ahorro.fondo?.length>0?ahorro.fondo[0].valor:0))}</span>
+            {ahorro&&<div style={{marginTop:14,paddingTop:12,borderTop:"1px solid var(--border)"}}>
+              <div style={{fontSize:11,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Ahorro</div>
+              {(()=>{
+                const efAhSaldo=(saldosIniciales["Efectivo Ahorro"]||0)+transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount>0).reduce((a,t)=>a+t.amount,0)-transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0);
+                return efAhSaldo!==0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+                  <span style={{color:"#7e22ce",fontWeight:600}}>Efectivo Ahorro</span>
+                  <span style={{fontWeight:600,color:efAhSaldo>=0?"var(--green)":"var(--red)"}}>{fmt(efAhSaldo)}</span>
+                </div>;
+              })()}
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+                <span>Plan Pensiones Mar</span><span style={{fontWeight:600}}>{fmt(ahorro.pensionMar||0)}</span>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+                <span>Plan Pensiones Salva</span><span style={{fontWeight:600}}>{fmt(ahorro.pensionSalva||0)}</span>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6}}>
+                <span>Fondo Inversión Salva</span>
+                <span style={{fontWeight:600}}>{ahorro.fondo?.length>0?fmt(ahorro.fondo[0].valor):fmt(0)}</span>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,borderTop:"1px solid var(--border)",paddingTop:6}}>
+                <span>Total Ahorro</span>
+                <span style={{color:"var(--green)"}}>{fmt((saldosIniciales["Efectivo Ahorro"]||0)+transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount>0).reduce((a,t)=>a+t.amount,0)-transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0)+(ahorro.pensionMar||0)+(ahorro.pensionSalva||0)+(ahorro.fondo?.length>0?ahorro.fondo[0].valor:0))}</span>
+              </div>
+            </div>}
+          </div>
+          {topCats.length>0&&<div className="card">
+            <div className="card-title">Top categorías del período</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {topCats.map(([cat,amt])=>{const pct=totalCatExp>0?Math.round(amt/totalCatExp*100):0;return(<div key={cat} style={{background:"var(--s2)",borderRadius:8,padding:"8px 10px",border:"1px solid var(--border)"}}><div style={{fontSize:12,fontWeight:600,marginBottom:5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:"var(--text)"}}>{cat}</div><div className="bbar" style={{marginBottom:4}}><div className="bbar-fill" style={{width:`${pct}%`,background:"var(--red)"}}/></div><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"var(--muted)"}}><span style={{color:"var(--red)",fontWeight:600}}>{fmt(amt)}</span><span>{pct}%</span></div></div>);})}
             </div>
           </div>}
         </div>
       </div>
-      <div className="grid2" style={{marginBottom:14}}>
-        {topCats.length>0&&<div className="card">
-          <div className="card-title">Top categorías del período</div>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {topCats.map(([cat,amt])=>{const pct=totalCatExp>0?Math.round(amt/totalCatExp*100):0;return(<div key={cat} style={{background:"var(--s2)",borderRadius:8,padding:"8px 10px",border:"1px solid var(--border)"}}><div style={{fontSize:12,fontWeight:600,marginBottom:5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:"var(--text)"}}>{cat}</div><div className="bbar" style={{marginBottom:4}}><div className="bbar-fill" style={{width:`${pct}%`,background:"var(--red)"}}/></div><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"var(--muted)"}}><span style={{color:"var(--red)",fontWeight:600}}>{fmt(amt)}</span><span>{pct}%</span></div></div>);})}
-          </div>
-        </div>}
-        <div className="card">
-          <div className="sh"><div className="card-title" style={{marginBottom:0}}>Últimos movimientos</div><button className="btn btn-o btn-sm" onClick={()=>setTab("transactions")}>Ver todos →</button></div>
-          {filteredTxs.length===0?<div className="empty">Sin movimientos este mes</div>
-            :<table className="tx-table"><thead><tr><th>Fecha</th><th>Concepto</th><th>Cuenta</th><th className="right">Importe</th></tr></thead><tbody>{filteredTxs.slice(0,8).map(t=><MiniTxRow key={t.id} tx={t}/>)}</tbody></table>}
-        </div>
+      <div className="card" style={{marginBottom:14}}>
+        <div className="sh"><div className="card-title" style={{marginBottom:0}}>Últimos movimientos</div><button className="btn btn-o btn-sm" onClick={()=>setTab("transactions")}>Ver todos →</button></div>
+        {filteredTxs.length===0?<div className="empty">Sin movimientos este mes</div>
+          :<table className="tx-table"><thead><tr><th>Fecha</th><th>Concepto</th><th>Cuenta</th><th className="right">Importe</th></tr></thead><tbody>{filteredTxs.slice(0,8).map(t=><MiniTxRow key={t.id} tx={t}/>)}</tbody></table>}
       </div>
     </div>
   );
