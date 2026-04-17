@@ -471,6 +471,7 @@ export default function App() {
       if(remote.batches) setBatches(remote.batches);
       if(remote.saldosIniciales) setSaldosIniciales(remote.saldosIniciales);
       if(remote.ahorro) setAhorro(remote.ahorro);
+      if(remote.apiKey) saveApiKey(remote.apiKey);
       setSyncStatus("saved");
     });
   },[]);
@@ -487,7 +488,8 @@ export default function App() {
   },[]);
 
   const getAllData=useCallback(()=>({
-    transactions,budgets,structure,rules,batches,saldosIniciales,ahorro
+    transactions,budgets,structure,rules,batches,saldosIniciales,ahorro,
+    apiKey: getApiKey()
   }),[transactions,budgets,structure,rules,batches,saldosIniciales,ahorro]);
 
   useEffect(()=>{if(!isRemoteLoad.current)triggerSave("fin_txs",transactions,getAllData);},[transactions]);
@@ -635,7 +637,7 @@ export default function App() {
   return(
     <>
       <style>{CSS}</style>
-      {showApiModal&&<ApiKeyModal onSave={(k)=>{saveApiKey(k);setShowApiModal(false);}}/>}
+      {showApiModal&&<ApiKeyModal onSave={(k)=>{saveApiKey(k);setShowApiModal(false);sbSave({...getAllData(),apiKey:k});}}/>}
       <div className="app">
         <header className="hdr">
           <div style={{display:"flex",alignItems:"center",gap:10}}>
