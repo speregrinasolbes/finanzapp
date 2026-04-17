@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback } from "react";
 
 const LS = {
@@ -1271,13 +1270,14 @@ async function parseImportFile(file, src) {
         if(!r) return null;
         const rs=rowsS[dataStart+idx]||[];
         if(isBBVATP){
-          // Col A vacía en el Excel → SheetJS omite col A → r[0]=Fecha, r[1]=Concepto, r[2]=Movimiento, r[3]=Importe
-          if(!rs[0]) return null;
-          const date=parseExcelDate(rs[0]);
-          const c1=String(r[1]||"").trim();
-          const c2=String(r[2]||"").trim();
+          // Col A vacía pero SheetJS la incluye (null) cuando otras filas tienen datos en esa col
+          // r[0]=null(colA), r[1]=Fecha, r[2]=Concepto, r[3]=Movimiento, r[4]=Importe
+          if(!rs[1]) return null;
+          const date=parseExcelDate(rs[1]);
+          const c1=String(r[2]||"").trim();
+          const c2=String(r[3]||"").trim();
           const description=c2&&c2!==c1&&c2!=="No categorizable"?`${c1} - ${c2}`:c1;
-          const amount=typeof r[3]==="number"?r[3]:parseFloat(String(r[3]).replace(",","."));
+          const amount=typeof r[4]==="number"?r[4]:parseFloat(String(r[4]).replace(",","."));
           if(!description||isNaN(amount)) return null;
           return{date,description,amount};
         } else {
