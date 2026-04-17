@@ -426,8 +426,8 @@ export default function App() {
   }));
   const [selMonth,setSelMonth]=useState(currentYM);
   // Shared period filter (used by Dashboard, Movimientos, Presupuestos, Ppto vs Real)
-  const [periodMode,setPeriodMode]=useState("month"); // month | year | range
-  const [rangeFrom,setRangeFrom]=useState(currentYM);
+  const [periodMode,setPeriodMode]=useState("range");
+  const [rangeFrom,setRangeFrom]=useState("2025-01");
   const [rangeTo,setRangeTo]=useState(currentYM);
   const [modal,setModal]=useState(null);
   const [splitTx,setSplitTx]=useState(null);
@@ -438,6 +438,13 @@ export default function App() {
   const [showApiModal,setShowApiModal]=useState(!getApiKey());
 
   useEffect(()=>{LS.set("fin_txs",transactions);},[transactions]);
+  // Update rangeTo to last month with transactions whenever transactions change
+  useEffect(()=>{
+    if(transactions.length===0) return;
+    const months=transactions.map(t=>t.date?.slice(0,7)).filter(Boolean).sort();
+    const lastMonth=months[months.length-1];
+    if(lastMonth) setRangeTo(lastMonth);
+  },[transactions]);
   useEffect(()=>{LS.set("fin_budgets",budgets);},[budgets]);
   useEffect(()=>{LS.set("fin_structure",structure);},[structure]);
   useEffect(()=>{LS.set("fin_rules",rules);},[rules]);
@@ -691,6 +698,15 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
             // Sin clasificar: movimientos sin categoría o con categoría vacía
             const sinClasif=filteredTxs.filter(t=>!t.category||t.category==="");
             const netSinClasif=sinClasif.reduce((s,t)=>s+t.amount,0);
+            // Validación: saldo período debería = (total disponible actual) - (suma saldos iniciales)
+            const totalSaldosIni=BANK_SOURCES.reduce((a,s)=>a+(saldosIniciales[s]||0),0);
+            const totalDisponible=BANK_SOURCES.reduce((a,s)=>{
+              const ini=saldosIniciales[s]||0;
+              const inc=transactions.filter(t=>t.source===s&&t.amount>0).reduce((x,t)=>x+t.amount,0);
+              const exp=transactions.filter(t=>t.source===s&&t.amount<0).reduce((x,t)=>x+Math.abs(t.amount),0);
+              return a+ini+inc-exp;
+            },0);
+            const saldoEsperado=totalDisponible-totalSaldosIni;
             return(<>
               <Section title="Ingresos" items={ingTotals} total={totalIng} color="var(--green)" isIncome/>
               <Section title="Gastos fijos" items={fijosTotals} total={totalFijos} color="var(--blue)"/>
@@ -703,6 +719,12 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
                 <div style={{fontSize:11,marginTop:5,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span style={{color:"var(--hint)"}}>⚠ {sinClasif.length} mov. sin clasificar no incluidos</span>
                   <span style={{color:netSinClasif>=0?"var(--green)":"var(--red)",fontWeight:500}}>{netSinClasif>=0?"+":""}{fmt(netSinClasif)}</span>
+                </div>
+              )}
+              {totalSaldosIni!==0&&(
+                <div style={{fontSize:11,marginTop:4,display:"flex",justifyContent:"space-between",alignItems:"center",color:"var(--hint)"}}>
+                  <span>Según disponibilidad (disp. actual − saldos iniciales)</span>
+                  <span style={{fontWeight:500,color:Math.abs(saldo-saldoEsperado)<0.01?"var(--green)":"var(--amber)"}}>{fmt(saldoEsperado)}</span>
                 </div>
               )}
             </>);
