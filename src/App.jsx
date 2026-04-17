@@ -698,15 +698,6 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
             // Sin clasificar: movimientos sin categoría o con categoría vacía
             const sinClasif=filteredTxs.filter(t=>!t.category||t.category==="");
             const netSinClasif=sinClasif.reduce((s,t)=>s+t.amount,0);
-            // Validación: saldo período debería = (total disponible actual) - (suma saldos iniciales)
-            const totalSaldosIni=BANK_SOURCES.reduce((a,s)=>a+(saldosIniciales[s]||0),0);
-            const totalDisponible=BANK_SOURCES.reduce((a,s)=>{
-              const ini=saldosIniciales[s]||0;
-              const inc=transactions.filter(t=>t.source===s&&t.amount>0).reduce((x,t)=>x+t.amount,0);
-              const exp=transactions.filter(t=>t.source===s&&t.amount<0).reduce((x,t)=>x+Math.abs(t.amount),0);
-              return a+ini+inc-exp;
-            },0);
-            const saldoEsperado=totalDisponible-totalSaldosIni;
             return(<>
               <Section title="Ingresos" items={ingTotals} total={totalIng} color="var(--green)" isIncome/>
               <Section title="Gastos fijos" items={fijosTotals} total={totalFijos} color="var(--blue)"/>
@@ -719,12 +710,6 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
                 <div style={{fontSize:11,marginTop:5,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span style={{color:"var(--hint)"}}>⚠ {sinClasif.length} mov. sin clasificar no incluidos</span>
                   <span style={{color:netSinClasif>=0?"var(--green)":"var(--red)",fontWeight:500}}>{netSinClasif>=0?"+":""}{fmt(netSinClasif)}</span>
-                </div>
-              )}
-              {totalSaldosIni!==0&&(
-                <div style={{fontSize:11,marginTop:4,display:"flex",justifyContent:"space-between",alignItems:"center",color:"var(--hint)"}}>
-                  <span>Según disponibilidad (disp. actual − saldos iniciales)</span>
-                  <span style={{fontWeight:500,color:Math.abs(saldo-saldoEsperado)<0.01?"var(--green)":"var(--amber)"}}>{fmt(saldoEsperado)}</span>
                 </div>
               )}
             </>);
@@ -787,7 +772,7 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
         </div>
       </div>
       {topCats.length>0&&<div className="card" style={{marginBottom:14}}>
-        <div className="card-title">Top categorías del mes</div>
+        <div className="card-title">Top categorías del período</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10}}>
           {topCats.map(([cat,amt])=>{const pct=totalCatExp>0?Math.round(amt/totalCatExp*100):0;return(<div key={cat} style={{background:"var(--s2)",borderRadius:9,padding:"10px 12px",border:"1px solid var(--border)"}}><div style={{fontSize:12,fontWeight:600,marginBottom:6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:"var(--text)"}}>{cat}</div><div className="bbar" style={{marginBottom:5}}><div className="bbar-fill" style={{width:`${pct}%`,background:"var(--red)"}}/></div><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"var(--muted)"}}><span style={{color:"var(--red)",fontWeight:600}}>{fmt(amt)}</span><span>{pct}%</span></div></div>);})}
         </div>
@@ -1521,13 +1506,13 @@ function Ahorro({ahorro,setAhorro,saldosIniciales,setSaldosIniciales,transaction
                 <div className="field" style={{marginBottom:8}}>
                   <label>Saldo inicial (€)</label>
                   <input type="text" inputMode="decimal"
-                    defaultValue={saldosIniciales[s]!=null?String(saldosIniciales[s]).replace(".",","):""}
+                    defaultValue={saldosIniciales[s]!=null?new Intl.NumberFormat("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2}).format(saldosIniciales[s]):""}
                     placeholder="0,00"
                     onBlur={e=>{
                       const v=parseSpanishNumber(e.target.value);
                       if(!isNaN(v)){
                         setSaldosIniciales(p=>({...p,[s]:v}));
-                        e.target.value=String(v).replace(".",",");
+                        e.target.value=new Intl.NumberFormat("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
                         showToast(`Saldo inicial ${s} guardado`);
                       }
                     }}
