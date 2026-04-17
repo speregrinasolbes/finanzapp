@@ -696,6 +696,17 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
                 <span style={{fontWeight:700,fontSize:13}}>Saldo del período</span>
                 <span style={{fontFamily:"var(--fd)",fontSize:17,fontWeight:700,color:saldo>=0?"var(--green)":"var(--red)"}}>{fmt(saldo)}</span>
               </div>
+              {(()=>{
+                const sinClasif=filteredTxs.filter(t=>!t.category&&!["Traspasos","Traspaso","No categorizable"].includes(t.category));
+                const netSinClasif=sinClasif.reduce((s,t)=>s+t.amount,0);
+                if(sinClasif.length===0) return null;
+                return(
+                  <div style={{fontSize:11,color:"var(--muted)",marginTop:5,textAlign:"right",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{color:"var(--hint)"}}>⚠ {sinClasif.length} mov. sin clasificar no incluidos</span>
+                    <span style={{color:netSinClasif>=0?"var(--green)":"var(--red)",fontWeight:500}}>{netSinClasif>=0?"+":""}{fmt(netSinClasif)}</span>
+                  </div>
+                );
+              })()}
             </>);
           })()}
         </div>
