@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useCallback } from "react";
 
 const LS = {
@@ -1241,6 +1242,80 @@ function BatchList({batches,transactions,onDeleteBatch,onEditTx,onSplitTx,struct
   </>);
 }
 
+// ─── File parser (outside component - no closure issues) ───────────────────
+async function parseImportFile(file, src) {
+  const ext=file.name.split(".").pop().toLowerCase();
+  console.log("parseImportFile: name=",file.name,"src=",src,"ext=",ext);
+  let raw=[];
+  if(ext==="csv"){
+    raw=parseCSV(await file.text());
+  } else if(ext==="pdf"){
+    const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
+    raw=await extractPDF(b64);
+  } else if(ext==="xlsx"||ext==="xls"){
+    const{read,utils}=await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
+    const wb=read(await file.arrayBuffer());
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const isBBVATP=src==="BBVA Tarjeta Prepago";
+    const isBBVA=src==="BBVA";
+    console.log("parseImportFile xlsx: isBBVATP=",isBBVATP,"isBBVA=",isBBVA);
+    if(isBBVA||isBBVATP){
+      const rowsR=utils.sheet_to_json(ws,{header:1,raw:true});
+      const rowsS=utils.sheet_to_json(ws,{header:1,raw:false});
+      let dataStart=5;
+      for(let i=0;i<Math.min(rowsS.length,10);i++){
+        if(rowsS[i]&&rowsS[i].some(c=>String(c||"").toLowerCase().includes("concepto"))){dataStart=i+1;break;}
+      }
+      console.log("BBVA dataStart=",dataStart,"first data row raw=",JSON.stringify(rowsR[dataStart]));
+      raw=rowsR.slice(dataStart).map((r,idx)=>{
+        if(!r) return null;
+        const rs=rowsS[dataStart+idx]||[];
+        if(isBBVATP){
+          // Col A vacía en el Excel → SheetJS omite col A → r[0]=Fecha, r[1]=Concepto, r[2]=Movimiento, r[3]=Importe
+          if(!rs[0]) return null;
+          const date=parseExcelDate(rs[0]);
+          const c1=String(r[1]||"").trim();
+          const c2=String(r[2]||"").trim();
+          const description=c2&&c2!==c1&&c2!=="No categorizable"?`${c1} - ${c2}`:c1;
+          const amount=typeof r[3]==="number"?r[3]:parseFloat(String(r[3]).replace(",","."));
+          if(!description||isNaN(amount)) return null;
+          return{date,description,amount};
+        } else {
+          // BBVA cuenta corriente
+          if(!rs[1]) return null;
+          const date=parseExcelDate(rs[1]);
+          const c1=String(r[2]||"").trim();
+          const c2=String(r[3]||"").trim();
+          const description=c2&&c2!==c1?`${c1} - ${c2}`:c1;
+          const amount=typeof r[4]==="number"?r[4]:parseFloat(r[4]);
+          const saldo=typeof r[6]==="number"?r[6]:(r[6]?parseFloat(r[6]):null);
+          if(!description||isNaN(amount)) return null;
+          return{date,description,amount,...(saldo!==null&&!isNaN(saldo)?{saldo}:{})};
+        }
+      }).filter(Boolean);
+    } else {
+      // Santander / Efectivo
+      const rows=utils.sheet_to_json(ws,{header:1,raw:false});
+      let dataStart=1;
+      for(let i=0;i<Math.min(rows.length,10);i++){
+        if(rows[i]&&rows[i].some(c=>String(c||"").toLowerCase().includes("concepto"))){dataStart=i+1;break;}
+      }
+      raw=rows.slice(dataStart).map(r=>{
+        if(!r||r.length<4||!r[0]) return null;
+        const date=parseExcelDate(r[0]);
+        const description=String(r[2]||"").trim();
+        const amount=parseSpanishNumber(r[3]);
+        const saldo=r[4]?parseSpanishNumber(r[4]):null;
+        if(isNaN(amount)||!description) return null;
+        return{date,description,amount,...(saldo!==null&&!isNaN(saldo)?{saldo}:{})};
+      }).filter(Boolean);
+    }
+  } else {
+    throw new Error("Formato no soportado: usa PDF, CSV o Excel");
+  }
+  return raw;
+}
+
 function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,onSplitTx,structure}){
   const [dragging,setDragging]=useState(false);
   const [processing,setProcessing]=useState(false);
@@ -1249,92 +1324,12 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
   const previewSrcRef=useRef("Santander");
   const fileRef=useRef();
 
-  const processFile=async(file,srcOverride)=>{
+  const handleFile=async(file)=>{
+    const src=previewSrcRef.current;
+    console.log("handleFile src=",src,"file=",file.name);
     setProcessing(true);setPreview([]);
     try{
-      const ext=file.name.split(".").pop().toLowerCase();
-      const currentSrc=srcOverride||previewSrcRef.current||previewSrc;
-      console.log("processFile: name=",file.name,"ext=",ext,"currentSrc=",currentSrc,"previewSrc state=",previewSrc,"ref=",previewSrcRef.current,"override=",srcOverride);
-      let raw=[];
-      if(ext==="csv"){
-        raw=parseCSV(await file.text());
-      } else if(ext==="pdf"){
-        const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
-        raw=await extractPDF(b64);
-      } else if(ext==="xlsx"||ext==="xls"){
-        const{read,utils}=await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
-        const wb=read(await file.arrayBuffer());
-        const ws=wb.Sheets[wb.SheetNames[0]];
-
-        // Use account name to determine format
-        const isBBVATP = currentSrc==="BBVA Tarjeta Prepago";
-        const isBBVA = currentSrc==="BBVA";
-        console.log("xlsx parser: isBBVA=",isBBVA,"isBBVATP=",isBBVATP,"currentSrc=",currentSrc);
-
-        if(isBBVA||isBBVATP){
-          // BBVA: amounts stored as real JS numbers in Excel — must use raw:true
-          const rowsR=utils.sheet_to_json(ws,{header:1,raw:true});
-          const rowsS=utils.sheet_to_json(ws,{header:1,raw:false});
-          // Find header row by looking for "Concepto" string
-          let dataStart=5;
-          for(let i=0;i<Math.min(rowsS.length,10);i++){
-            const r=rowsS[i];
-            if(r&&r.some(c=>String(c||"").toLowerCase().includes("concepto"))){
-              dataStart=i+1; break;
-            }
-          }
-          raw=rowsR.slice(dataStart).map((r,idx)=>{
-            if(!r) return null;
-            // Get formatted date string from rowsS
-            const rs=rowsS[dataStart+idx]||[];
-            if(isBBVATP){
-              // col 0=Fecha, 1=Concepto, 2=Movimiento, 3=Importe
-              if(idx===0) console.log("TP DEBUG rowR:",JSON.stringify(r),"rowS:",JSON.stringify(rs));
-              if(!rs[0]) return null;
-              const date=parseExcelDate(rs[0]);
-              const c1=String(r[1]||"").trim();
-              const c2=String(r[2]||"").trim();
-              const description=c2&&c2!==c1&&c2!=="No categorizable"?`${c1} - ${c2}`:c1;
-              const amount=typeof r[3]==="number"?r[3]:parseFloat(r[3]);
-              if(idx===0) console.log("TP DEBUG date:",date,"desc:",description,"amount:",amount);
-              if(!description||isNaN(amount)) return null;
-              return{date,description,amount};
-            } else {
-              // col 0=FechaValor, 1=Fecha, 2=Concepto, 3=Movimiento, 4=Importe, 6=Disponible
-              if(!rs[1]) return null;
-              const date=parseExcelDate(rs[1]);
-              const c1=String(r[2]||"").trim();
-              const c2=String(r[3]||"").trim();
-              const description=c2&&c2!==c1?`${c1} - ${c2}`:c1;
-              const amount=typeof r[4]==="number"?r[4]:parseFloat(r[4]);
-              const saldo=typeof r[6]==="number"?r[6]:(r[6]?parseFloat(r[6]):null);
-              if(!description||isNaN(amount)) return null;
-              return{date,description,amount,...(saldo!==null&&!isNaN(saldo)?{saldo}:{})};
-            }
-          }).filter(Boolean);
-        } else {
-          // Santander y Efectivo: importes en texto formato español "1.034,89"
-          const rows=utils.sheet_to_json(ws,{header:1,raw:false});
-          let dataStart=1;
-          for(let i=0;i<Math.min(rows.length,10);i++){
-            const r=rows[i];
-            if(r&&r.some(c=>String(c||"").toLowerCase().includes("concepto"))){
-              dataStart=i+1; break;
-            }
-          }
-          raw=rows.slice(dataStart).map(r=>{
-            if(!r||r.length<4||!r[0]) return null;
-            const date=parseExcelDate(r[0]);
-            const description=String(r[2]||"").trim();
-            const amount=parseSpanishNumber(r[3]);
-            const saldo=r[4]?parseSpanishNumber(r[4]):null;
-            if(isNaN(amount)||!description) return null;
-            return{date,description,amount,...(saldo!==null&&!isNaN(saldo)?{saldo}:{})};
-          }).filter(Boolean);
-        }
-      } else {
-        showToast("Formato no soportado: usa PDF, CSV o Excel","✕");
-      }
+      const raw=await parseImportFile(file,src);
       setPreview(raw);
       if(raw.length>0) showToast(`${raw.length} movimientos listos para importar`,"📋");
       else showToast("No se encontraron movimientos en el archivo","✕");
@@ -1346,10 +1341,12 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
   };
 
   const confirm=()=>{
-    const label=`${previewSrcRef.current} · ${new Date().toLocaleDateString("es-ES")} · ${preview.length} mov.`;
-    onImport(preview.map(t=>({...t,source:previewSrcRef.current})),label);
+    const src=previewSrcRef.current;
+    const label=`${src} · ${new Date().toLocaleDateString("es-ES")} · ${preview.length} mov.`;
+    onImport(preview.map(t=>({...t,source:src})),label);
     setPreview([]);
   };
+
 
   return(
     <div>
@@ -1361,8 +1358,8 @@ function Import({onImport,showToast,batches,onDeleteBatch,transactions,onEditTx,
           <span style={{fontSize:13,fontWeight:600}}>Cuenta:</span>
           <div className="period-tabs">{IMPORT_SOURCES.map(s=><button key={s} className={`period-tab${previewSrc===s?" active":""}`} onClick={()=>{setPreviewSrc(s);previewSrcRef.current=s;}}>{s}</button>)}</div>
         </div>
-        <div className={`drop-zone${dragging?" drag":""}`} onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0],previewSrc);}} onClick={()=>fileRef.current?.click()}>
-          <input ref={fileRef} type="file" accept=".csv,.pdf,.xlsx,.xls" style={{display:"none"}} onChange={e=>e.target.files[0]&&processFile(e.target.files[0],previewSrc)}/>
+        <div className={`drop-zone${dragging?" drag":""}`} onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);}} onClick={()=>fileRef.current?.click()}>
+          <input ref={fileRef} type="file" accept=".csv,.pdf,.xlsx,.xls" style={{display:"none"}} onChange={e=>e.target.files[0]&&handleFile(e.target.files[0])}/>
           {processing?<><div style={{fontSize:32,marginBottom:10}} className="spin">⟳</div><div style={{fontSize:13,fontWeight:500}}>Leyendo archivo...</div></>
             :<><div style={{fontSize:32,marginBottom:10}}>📤</div><div style={{fontSize:14,fontWeight:600,marginBottom:4}}>Arrastra el extracto aquí o haz clic</div><div style={{fontSize:12,color:"var(--muted)"}}>PDF · CSV · Excel (.xlsx) — Extracto de: {previewSrc}</div><div style={{fontSize:11,color:"var(--hint)",marginTop:6}}>Formato Santander: col A=Fecha, C=Concepto, D=Importe</div></>}
         </div>
