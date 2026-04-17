@@ -673,21 +673,24 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
             const totalVar=varTotals.reduce((s,i)=>s+i.amt,0);
             const totalIng=ingTotals.reduce((s,i)=>s+i.amt,0);
             const saldo=totalIng-totalFijos-totalVar;
-            const Section=({title,items,total,color,isIncome=false})=>items.length===0?null:(
+            const Section=({title,items,total,color,isIncome=false,maxItems=999})=>items.length===0?null:(
               <div style={{marginBottom:12}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,paddingBottom:4,borderBottom:"1px solid var(--border)"}}>
                   <span style={{fontSize:12,fontWeight:700,color,textTransform:"uppercase",letterSpacing:".06em"}}>{title}</span>
                   <span style={{fontSize:13,fontWeight:700,color}}>{fmt(total)}</span>
                 </div>
-                {items.slice(0,6).map(i=>(
+                {items.slice(0,maxItems).map(i=>(
                   <div key={i.label} style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3,paddingLeft:8}}>
                     <span style={{color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"65%"}}>{i.label}</span>
                     <span style={{fontWeight:500,color:isIncome?"var(--green)":"var(--text)"}}>{fmt(i.amt)}</span>
                   </div>
                 ))}
-                {items.length>6&&<div style={{fontSize:11,color:"var(--hint)",paddingLeft:8}}>…y {items.length-6} más</div>}
+                {items.length>maxItems&&<div style={{fontSize:11,color:"var(--hint)",paddingLeft:8}}>…y {items.length-maxItems} más</div>}
               </div>
             );
+            // Sin clasificar: movimientos sin categoría o con categoría vacía
+            const sinClasif=filteredTxs.filter(t=>!t.category||t.category==="");
+            const netSinClasif=sinClasif.reduce((s,t)=>s+t.amount,0);
             return(<>
               <Section title="Ingresos" items={ingTotals} total={totalIng} color="var(--green)" isIncome/>
               <Section title="Gastos fijos" items={fijosTotals} total={totalFijos} color="var(--blue)"/>
@@ -696,17 +699,12 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
                 <span style={{fontWeight:700,fontSize:13}}>Saldo del período</span>
                 <span style={{fontFamily:"var(--fd)",fontSize:17,fontWeight:700,color:saldo>=0?"var(--green)":"var(--red)"}}>{fmt(saldo)}</span>
               </div>
-              {(()=>{
-                const sinClasif=filteredTxs.filter(t=>!t.category&&!["Traspasos","Traspaso","No categorizable"].includes(t.category));
-                const netSinClasif=sinClasif.reduce((s,t)=>s+t.amount,0);
-                if(sinClasif.length===0) return null;
-                return(
-                  <div style={{fontSize:11,color:"var(--muted)",marginTop:5,textAlign:"right",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span style={{color:"var(--hint)"}}>⚠ {sinClasif.length} mov. sin clasificar no incluidos</span>
-                    <span style={{color:netSinClasif>=0?"var(--green)":"var(--red)",fontWeight:500}}>{netSinClasif>=0?"+":""}{fmt(netSinClasif)}</span>
-                  </div>
-                );
-              })()}
+              {sinClasif.length>0&&(
+                <div style={{fontSize:11,marginTop:5,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{color:"var(--hint)"}}>⚠ {sinClasif.length} mov. sin clasificar no incluidos</span>
+                  <span style={{color:netSinClasif>=0?"var(--green)":"var(--red)",fontWeight:500}}>{netSinClasif>=0?"+":""}{fmt(netSinClasif)}</span>
+                </div>
+              )}
             </>);
           })()}
         </div>
