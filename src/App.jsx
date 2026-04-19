@@ -1573,9 +1573,10 @@ function TxModal({tx,structure,onClose,onSave,onDelete}){
 function SaldoInput({value, onSave}) {
   const fmtES = v => {
     const n = Number(v);
-    if(!v && v!==0) return "";
-    if(isNaN(n)) return "";
-    return new Intl.NumberFormat("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+    if((!v && v!==0) || isNaN(n)) return "";
+    const parts = n.toFixed(2).split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return parts.join(",");
   };
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
