@@ -1571,19 +1571,25 @@ function TxModal({tx,structure,onClose,onSave,onDelete}){
 
 // ── AHORRO ────────────────────────────────────────────────────────────────────
 function SaldoInput({value, onSave}) {
-  const fmtES = v => new Intl.NumberFormat("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(v)||0);
-  const toDisplay = v => (v!=null && v!==0 && v!=="" && !isNaN(Number(v))) ? fmtES(v) : "";
-  const [display, setDisplay] = useState(()=>toDisplay(value));
-  // Sync when value changes externally (e.g. Supabase load)
-  useEffect(()=>{ setDisplay(toDisplay(value)); },[value]);
+  const fmtES = v => {
+    const n = Number(v);
+    if(!v && v!==0) return "";
+    if(isNaN(n)) return "";
+    return new Intl.NumberFormat("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+  };
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  // When not editing, always show the formatted external value
+  const display = editing ? draft : fmtES(value);
   return(
     <input type="text" inputMode="decimal"
       value={display}
-      onChange={e=>setDisplay(e.target.value)}
+      onChange={e=>setDraft(e.target.value)}
+      onFocus={()=>{ setEditing(true); setDraft(fmtES(value)); }}
       onBlur={()=>{
-        const v=parseSpanishNumber(display);
-        if(!isNaN(v)){ setDisplay(fmtES(v)); onSave(v); }
-        else setDisplay(value!=null&&value!==0?fmtES(value):"");
+        setEditing(false);
+        const v=parseSpanishNumber(draft);
+        if(!isNaN(v)) onSave(v);
       }}
       placeholder="0,00"
       style={{background:"#fff",border:"1px solid var(--border)",color:"var(--text)",borderRadius:7,padding:"6px 9px",fontSize:13,fontFamily:"var(--ff)",outline:"none",textAlign:"right",width:"100%"}}
