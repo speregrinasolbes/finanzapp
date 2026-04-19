@@ -1669,12 +1669,7 @@ function Ahorro({ahorro,setAhorro,saldosIniciales,setSaldosIniciales,transaction
             <div key={key} style={{background:"var(--s2)",borderRadius:9,padding:"12px 14px",border:"1px solid var(--border)"}}>
               <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>{label}</div>
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <input type="number" step="0.01"
-                  defaultValue={ahorro[key]||""}
-                  placeholder="Valor actual..."
-                  onBlur={e=>savePension(key,e.target.value)}
-                  style={{flex:1,background:"#fff",border:"1px solid var(--border)",color:"var(--text)",borderRadius:7,padding:"8px 10px",fontSize:14,fontFamily:"var(--ff)",outline:"none",textAlign:"right",fontWeight:600}}
-                />
+                <SaldoInput value={ahorro[key]||0} onSave={v=>savePension(key,v)}/>
                 <span style={{fontSize:12,color:"var(--muted)"}}>€</span>
               </div>
               <div style={{fontSize:11,color:"var(--muted)",marginTop:6}}>Actualiza cuando recibas el extracto del plan</div>
