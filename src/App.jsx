@@ -601,13 +601,13 @@ export default function App() {
       try{
         const keyword=await extractKeyword(tx.description);
         if(keyword&&keyword.length>2){
-          const exists=rules.some(r=>r.keyword.toLowerCase()===keyword.toLowerCase());
-          if(!exists){
-            const newRule={id:uid(),keyword,category:tx.category,source:tx.source||"Efectivo",exact:false,auto:true};
-            setRules(prev=>[newRule,...prev]);
+          setRules(prev=>{
+            const exists=prev.some(r=>r.keyword.toLowerCase()===keyword.toLowerCase());
+            if(exists) return prev;
             showToast(`Regla aprendida: "${keyword}" → ${tx.category}`,"⚡");
-            return;
-          }
+            return [{id:uid(),keyword,category:tx.category,source:tx.source||"Efectivo",exact:false,auto:true},...prev];
+          });
+          return;
         }
       }catch{}
     }
@@ -623,11 +623,12 @@ export default function App() {
       try{
         const keyword=await extractKeyword(tx.description);
         if(keyword&&keyword.length>2){
-          const exists=rules.some(r=>r.keyword.toLowerCase()===keyword.toLowerCase());
-          if(!exists){
-            setRules(prev=>[{id:uid(),keyword,category:newCategory,source:tx.source||"Efectivo",exact:false,auto:true},...prev]);
+          setRules(prev=>{
+            const exists=prev.some(r=>r.keyword.toLowerCase()===keyword.toLowerCase());
+            if(exists) return prev;
             showToast(`Regla aprendida: "${keyword}" → ${newCategory}`,"⚡");
-          }
+            return [{id:uid(),keyword,category:newCategory,source:tx.source||"Efectivo",exact:false,auto:true},...prev];
+          });
         }
       }catch{}
     }
@@ -840,7 +841,7 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
                   </div>
                 ))}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"2px solid var(--border)",paddingTop:10,marginTop:4}}>
-                  <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>Total disponible</span>
+                  <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>Total Disponible</span>
                   <span style={{fontFamily:"var(--fd)",fontSize:18,fontWeight:700,color:totalDisponible>=0?"var(--green)":"var(--red)"}}>{fmt(totalDisponible)}</span>
                 </div>
               </>);
@@ -849,25 +850,31 @@ function Dashboard({filteredTxs,income,expense,source,selMonth,periodLabel,trans
               <div style={{fontSize:11,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Ahorro</div>
               {(()=>{
                 const efAhSaldo=(saldosIniciales["Efectivo Ahorro"]||0)+transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount>0).reduce((a,t)=>a+t.amount,0)-transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0);
-                return efAhSaldo!==0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
-                  <span style={{color:"#7e22ce",fontWeight:600}}>Efectivo Ahorro</span>
-                  <span style={{fontWeight:600,color:efAhSaldo>=0?"var(--green)":"var(--red)"}}>{fmt(efAhSaldo)}</span>
-                </div>;
+                const totalAhorro=efAhSaldo+(ahorro.pensionMar||0)+(ahorro.pensionSalva||0)+(ahorro.fondo?.length>0?ahorro.fondo[0].valor:0);
+                const totalDisp=BANK_SOURCES.reduce((a,s)=>{const ini=saldosIniciales[s]||0;const inc=transactions.filter(t=>t.source===s&&t.amount>0).reduce((x,t)=>x+t.amount,0);const exp=transactions.filter(t=>t.source===s&&t.amount<0).reduce((x,t)=>x+Math.abs(t.amount),0);return a+ini+inc-exp;},0);
+                return(<>
+                  {efAhSaldo!==0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+                    <span>Efectivo Ahorro</span><span style={{fontWeight:600}}>{fmt(efAhSaldo)}</span>
+                  </div>}
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+                    <span>Plan Pensiones Mar</span><span style={{fontWeight:600}}>{fmt(ahorro.pensionMar||0)}</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+                    <span>Plan Pensiones Salva</span><span style={{fontWeight:600}}>{fmt(ahorro.pensionSalva||0)}</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6}}>
+                    <span>Fondo Inversión Salva</span>
+                    <span style={{fontWeight:600}}>{ahorro.fondo?.length>0?fmt(ahorro.fondo[0].valor):fmt(0)}</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,borderTop:"1px solid var(--border)",paddingTop:6,marginBottom:8}}>
+                    <span>Total Ahorro</span><span style={{color:"var(--green)"}}>{fmt(totalAhorro)}</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"2px solid var(--border2)",paddingTop:8}}>
+                    <span style={{fontSize:13,fontWeight:700}}>TOTAL PATRIMONIO</span>
+                    <span style={{fontFamily:"var(--fd)",fontSize:16,fontWeight:700,color:"var(--green)"}}>{fmt(totalDisp+totalAhorro)}</span>
+                  </div>
+                </>);
               })()}
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
-                <span>Plan Pensiones Mar</span><span style={{fontWeight:600}}>{fmt(ahorro.pensionMar||0)}</span>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
-                <span>Plan Pensiones Salva</span><span style={{fontWeight:600}}>{fmt(ahorro.pensionSalva||0)}</span>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6}}>
-                <span>Fondo Inversión Salva</span>
-                <span style={{fontWeight:600}}>{ahorro.fondo?.length>0?fmt(ahorro.fondo[0].valor):fmt(0)}</span>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,borderTop:"1px solid var(--border)",paddingTop:6}}>
-                <span>Total Ahorro</span>
-                <span style={{color:"var(--green)"}}>{fmt((saldosIniciales["Efectivo Ahorro"]||0)+transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount>0).reduce((a,t)=>a+t.amount,0)-transactions.filter(t=>t.source==="Efectivo Ahorro"&&t.amount<0).reduce((a,t)=>a+Math.abs(t.amount),0)+(ahorro.pensionMar||0)+(ahorro.pensionSalva||0)+(ahorro.fondo?.length>0?ahorro.fondo[0].valor:0))}</span>
-              </div>
             </div>}
           </div>
           {topCats.length>0&&<div className="card">
@@ -1564,10 +1571,11 @@ function TxModal({tx,structure,onClose,onSave,onDelete}){
 
 // ── AHORRO ────────────────────────────────────────────────────────────────────
 function SaldoInput({value, onSave}) {
-  const fmtES = v => new Intl.NumberFormat("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2}).format(v||0);
-  const [display, setDisplay] = useState(()=>value!=null&&value!==0?fmtES(value):"");
+  const fmtES = v => new Intl.NumberFormat("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(v)||0);
+  const toDisplay = v => (v!=null && v!==0 && v!=="" && !isNaN(Number(v))) ? fmtES(v) : "";
+  const [display, setDisplay] = useState(()=>toDisplay(value));
   // Sync when value changes externally (e.g. Supabase load)
-  useEffect(()=>{ setDisplay(value!=null&&value!==0?fmtES(value):""); },[value]);
+  useEffect(()=>{ setDisplay(toDisplay(value)); },[value]);
   return(
     <input type="text" inputMode="decimal"
       value={display}
