@@ -181,7 +181,7 @@ async function classifyWithAI(transactions, structure, rules) {
     ? `\nReglas de clasificación definidas por el usuario (aplícalas con prioridad):\n${rules.map(r=>`- Si contiene "${r.keyword}" → "${r.category}" (${r.source==="Todas"?"todas las cuentas":r.source})`).join("\n")}`
     : "";
   const prompt = `Eres asistente de finanzas personales español. Clasifica cada transacción bancaria en la subcategoría más adecuada de esta lista:\n${catList}${rulesHint}\n\nResponde SOLO con JSON array sin markdown: [{"id":"tx_id","catIndex":número}]\n\nTransacciones:\n${transactions.map(t=>`id:${t.id}|"${t.description}"|${t.amount}€`).join("\n")}`;
-  const resp = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":getApiKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})});
+  const resp = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":getApiKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:prompt}]})});
   const data = await resp.json();
   const text = (data.content||[]).map(b=>b.text||"").join("").replace(/```json|```/g,"").trim();
   try { return JSON.parse(text); } catch { return []; }
@@ -189,13 +189,13 @@ async function classifyWithAI(transactions, structure, rules) {
 
 async function extractKeyword(description) {
   if (!getApiKey()) return null;
-  const resp = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":getApiKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:100,messages:[{role:"user",content:`De esta descripción de extracto bancario: "${description}"\nExtrae la palabra o fragmento clave más identificativo del comercio/concepto (ej: MERCADONA, ENDESA, NETFLIX). Responde SOLO con la palabra clave, sin explicación ni comillas.`}]})});
+  const resp = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":getApiKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:100,messages:[{role:"user",content:`De esta descripción de extracto bancario: "${description}"\nExtrae la palabra o fragmento clave más identificativo del comercio/concepto (ej: MERCADONA, ENDESA, NETFLIX). Responde SOLO con la palabra clave, sin explicación ni comillas.`}]})});
   const data = await resp.json();
   return (data.content||[]).map(b=>b.text||"").join("").trim()||null;
 }
 
 async function extractPDF(base64) {
-  const resp = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":getApiKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:[{type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},{type:"text",text:'Extrae TODAS las transacciones bancarias. Responde SOLO con JSON array sin markdown:\n[{"date":"YYYY-MM-DD","description":"texto","amount":número}]\nGastos=negativo, Ingresos=positivo.'}]}]})});
+  const resp = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":getApiKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:[{type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},{type:"text",text:'Extrae TODAS las transacciones bancarias. Responde SOLO con JSON array sin markdown:\n[{"date":"YYYY-MM-DD","description":"texto","amount":número}]\nGastos=negativo, Ingresos=positivo.'}]}]})});
   const data = await resp.json();
   const text = (data.content||[]).map(b=>b.text||"").join("").replace(/```json|```/g,"").trim();
   try { return JSON.parse(text); } catch { return []; }
@@ -230,7 +230,7 @@ async function suggestBulkGroups(unclassified, structure) {
 
   const resp = await fetch("https://api.anthropic.com/v1/messages",{
     method:"POST",headers:{"Content-Type":"application/json","x-api-key":getApiKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:prompt}]})
   });
   const data = await resp.json();
   const text = (data.content||[]).map(b=>b.text||"").join("").replace(/```json|```/g,"").trim();
@@ -443,9 +443,9 @@ export default function App() {
   const [batches,setBatches]=useState(()=>LS.get("fin_batches",[]));
   const [saldosIniciales,setSaldosIniciales]=useState(()=>LS.get("fin_saldos",{}));
   const [ahorro,setAhorro]=useState(()=>LS.get("fin_ahorro",{pensionMar:0,pensionSalva:0,fondo:[]}));
-  const [syncStatus,setSyncStatus]=useState("idle"); // idle | saving | saved | error
+  const [syncStatus,setSyncStatus]=useState("idle");
   const sbSaveTimer=useRef(null);
-  const isRemoteLoad=useRef(false);
+  const skipNextSave=useRef(0); // count of state updates to skip after remote load
   const [selMonth,setSelMonth]=useState(currentYM);
   // Shared period filter (used by Dashboard, Movimientos, Presupuestos, Ppto vs Real)
   const [periodMode,setPeriodMode]=useState("range");
@@ -459,12 +459,12 @@ export default function App() {
   const [classifyProgress,setClassifyProgress]=useState(0);
   const [showApiModal,setShowApiModal]=useState(!getApiKey());
 
-  // Load from Supabase on mount — only overrides local if remote has actual data
+  // Load from Supabase on mount
   useEffect(()=>{
     sbLoad().then(remote=>{
-      // Only load from remote if it has transactions (not empty/fresh DB)
       if(!remote || !remote.transactions || remote.transactions.length===0) return;
-      isRemoteLoad.current=true;
+      // Skip saving for each state update triggered by remote load (7 fields)
+      skipNextSave.current=7;
       if(remote.transactions) setTransactions(remote.transactions);
       if(remote.budgets) setBudgets(remote.budgets);
       if(remote.structure) setStructure(remote.structure);
@@ -477,23 +477,27 @@ export default function App() {
     });
   },[]);
 
-  // Debounced save to Supabase + immediate save to localStorage
-  const triggerSave=useCallback((key,val,all)=>{
-    LS.set(key,val);
-    if(isRemoteLoad.current===true) isRemoteLoad.current=false;
+  // Single debounced save watching all state
+  useEffect(()=>{
+    // Save to localStorage immediately
+    LS.set("fin_txs",transactions);
+    LS.set("fin_budgets",budgets);
+    LS.set("fin_structure",structure);
+    LS.set("fin_rules",rules);
+    LS.set("fin_batches",batches);
+    LS.set("fin_saldos",saldosIniciales);
+    LS.set("fin_ahorro",ahorro);
+    // Skip if this is a remote load
+    if(skipNextSave.current>0){ skipNextSave.current=0; return; }
+    // Debounced save to Supabase
     if(sbSaveTimer.current) clearTimeout(sbSaveTimer.current);
     setSyncStatus("saving");
+    const data={transactions,budgets,structure,rules,batches,saldosIniciales,ahorro,apiKey:getApiKey()};
     sbSaveTimer.current=setTimeout(()=>{
-      sbSave(all()).then(()=>setSyncStatus("saved")).catch(()=>setSyncStatus("error"));
+      sbSave(data).then(()=>setSyncStatus("saved")).catch(()=>setSyncStatus("error"));
     },2000);
-  },[]);
+  },[transactions,budgets,structure,rules,batches,saldosIniciales,ahorro]);
 
-  const getAllData=useCallback(()=>({
-    transactions,budgets,structure,rules,batches,saldosIniciales,ahorro,
-    apiKey: getApiKey()
-  }),[transactions,budgets,structure,rules,batches,saldosIniciales,ahorro]);
-
-  useEffect(()=>{if(!isRemoteLoad.current)triggerSave("fin_txs",transactions,getAllData);},[transactions]);
   // Update rangeTo to last month with transactions
   useEffect(()=>{
     if(transactions.length===0) return;
@@ -501,12 +505,10 @@ export default function App() {
     const lastMonth=months[months.length-1];
     if(lastMonth) setRangeTo(lastMonth);
   },[transactions]);
-  useEffect(()=>{if(!isRemoteLoad.current)triggerSave("fin_budgets",budgets,getAllData);},[budgets]);
-  useEffect(()=>{if(!isRemoteLoad.current)triggerSave("fin_structure",structure,getAllData);},[structure]);
-  useEffect(()=>{if(!isRemoteLoad.current)triggerSave("fin_rules",rules,getAllData);},[rules]);
-  useEffect(()=>{if(!isRemoteLoad.current)triggerSave("fin_batches",batches,getAllData);},[batches]);
-  useEffect(()=>{if(!isRemoteLoad.current)triggerSave("fin_saldos",saldosIniciales,getAllData);},[saldosIniciales]);
-  useEffect(()=>{if(!isRemoteLoad.current)triggerSave("fin_ahorro",ahorro,getAllData);},[ahorro]);
+
+  const getAllData=useCallback(()=>({
+    transactions,budgets,structure,rules,batches,saldosIniciales,ahorro,apiKey:getApiKey()
+  }),[transactions,budgets,structure,rules,batches,saldosIniciales,ahorro]);
 
   const showToast=(msg,icon="✓")=>{setToast({msg,icon});setTimeout(()=>setToast(null),4000);};
 
@@ -1385,14 +1387,18 @@ async function parseImportFile(file, src) {
         if(!r) return null;
         const rs=rowsS[dataStart+idx]||[];
         if(isBBVATP){
-          // Col A vacía pero SheetJS la incluye (null) cuando otras filas tienen datos en esa col
-          // r[0]=null(colA), r[1]=Fecha, r[2]=Concepto, r[3]=Movimiento, r[4]=Importe
-          if(!rs[1]) return null;
-          const date=parseExcelDate(rs[1]);
-          const c1=String(r[2]||"").trim();
-          const c2=String(r[3]||"").trim();
+          // BBVA TP: detect if col A is empty (null) or not — varies between exports
+          // If r[0] is null → offsets: r[1]=Fecha, r[2]=Concepto, r[3]=Movimiento, r[4]=Importe
+          // If r[0] is a date string → offsets: r[0]=Fecha, r[1]=Concepto, r[2]=Movimiento, r[3]=Importe
+          const hasEmptyColA = r[0]===null||r[0]===undefined||r[0]==="";
+          const off = hasEmptyColA ? 1 : 0;
+          const dateStr = rs[off];
+          if(!dateStr) return null;
+          const date=parseExcelDate(dateStr);
+          const c1=String(r[off+1]||"").trim();
+          const c2=String(r[off+2]||"").trim();
           const description=c2&&c2!==c1&&c2!=="No categorizable"?`${c1} - ${c2}`:c1;
-          const amount=typeof r[4]==="number"?r[4]:parseFloat(String(r[4]).replace(",","."));
+          const amount=typeof r[off+3]==="number"?r[off+3]:parseFloat(String(r[off+3]||"").replace(",","."));
           if(!description||isNaN(amount)) return null;
           return{date,description,amount};
         } else {
@@ -1557,6 +1563,26 @@ function TxModal({tx,structure,onClose,onSave,onDelete}){
 
 
 // ── AHORRO ────────────────────────────────────────────────────────────────────
+function SaldoInput({value, onSave}) {
+  const fmtES = v => new Intl.NumberFormat("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2}).format(v||0);
+  const [display, setDisplay] = useState(()=>value!=null&&value!==0?fmtES(value):"");
+  // Sync when value changes externally (e.g. Supabase load)
+  useEffect(()=>{ setDisplay(value!=null&&value!==0?fmtES(value):""); },[value]);
+  return(
+    <input type="text" inputMode="decimal"
+      value={display}
+      onChange={e=>setDisplay(e.target.value)}
+      onBlur={()=>{
+        const v=parseSpanishNumber(display);
+        if(!isNaN(v)){ setDisplay(fmtES(v)); onSave(v); }
+        else setDisplay(value!=null&&value!==0?fmtES(value):"");
+      }}
+      placeholder="0,00"
+      style={{background:"#fff",border:"1px solid var(--border)",color:"var(--text)",borderRadius:7,padding:"6px 9px",fontSize:13,fontFamily:"var(--ff)",outline:"none",textAlign:"right",width:"100%"}}
+    />
+  );
+}
+
 function Ahorro({ahorro,setAhorro,saldosIniciales,setSaldosIniciales,transactions,activeMonths,showToast}){
   const [newFondoVal,setNewFondoVal]=useState("");
   const [newFondoDate,setNewFondoDate]=useState(today());
@@ -1604,20 +1630,7 @@ function Ahorro({ahorro,setAhorro,saldosIniciales,setSaldosIniciales,transaction
                 <div style={{fontSize:12,fontWeight:700,marginBottom:8,color:"var(--text)"}}>{s}</div>
                 <div className="field" style={{marginBottom:8}}>
                   <label>Saldo inicial (€)</label>
-                  <input type="text" inputMode="decimal"
-                    key={`${s}-${saldosIniciales[s]}`}
-                    defaultValue={saldosIniciales[s]!=null?new Intl.NumberFormat("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2}).format(saldosIniciales[s]):""}
-                    placeholder="0,00"
-                    onBlur={e=>{
-                      const v=parseSpanishNumber(e.target.value);
-                      if(!isNaN(v)){
-                        setSaldosIniciales(p=>({...p,[s]:v}));
-                        e.target.value=new Intl.NumberFormat("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
-                        showToast(`Saldo inicial ${s} guardado`);
-                      }
-                    }}
-                    style={{background:"#fff",border:"1px solid var(--border)",color:"var(--text)",borderRadius:7,padding:"6px 9px",fontSize:13,fontFamily:"var(--ff)",outline:"none",textAlign:"right"}}
-                  />
+                  <SaldoInput value={saldoInicial} onSave={v=>{setSaldosIniciales(p=>({...p,[s]:v}));showToast(`Saldo inicial ${s} guardado`);}}/>
                 </div>
                 <div style={{fontSize:11,color:"var(--muted)",display:"flex",flexDirection:"column",gap:2}}>
                   <div style={{display:"flex",justifyContent:"space-between"}}><span>Ingresos:</span><span style={{color:"var(--green)",fontWeight:600}}>+{fmt(movInc)}</span></div>
