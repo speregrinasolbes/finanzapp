@@ -1182,7 +1182,15 @@ function Rules({rules,setRules,structure,showToast}){
         <div className="card-title">Nueva regla</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           <div className="field"><label>Si el extracto contiene</label><input value={newKw} onChange={e=>setNewKw(e.target.value)} placeholder="Ej: MERCADONA" onKeyDown={e=>e.key==="Enter"&&addRule()}/></div>
-          <div className="field"><label>Asignar a categoría</label><select value={newCat} onChange={e=>setNewCat(e.target.value)}><option value="">Seleccionar...</option>{allItems.map(i=><option key={i.id} value={i.label}>{i.label} ({i.fuente})</option>)}</select></div>
+          <div className="field"><label>Asignar a categoría</label><select value={newCat} onChange={e=>setNewCat(e.target.value)}>
+            <option value="">Seleccionar...</option>
+            <optgroup label="── Gastos ──">
+              {[...structure.gastos.flatMap(f=>f.grupos.flatMap(g=>g.items))].sort((a,b)=>a.label.localeCompare(b.label,"es")).map(i=><option key={i.id} value={i.label}>{i.label}</option>)}
+            </optgroup>
+            <optgroup label="── Ingresos ──">
+              {[...structure.ingresos.flatMap(g=>g.items)].sort((a,b)=>a.label.localeCompare(b.label,"es")).map(i=><option key={i.id} value={i.label}>{i.label}</option>)}
+            </optgroup>
+          </select></div>
           <div className="field"><label>Cuenta</label><select value={newSrc} onChange={e=>setNewSrc(e.target.value)}><option value="Todas">Todas las cuentas</option>{SOURCES.map(s=><option key={s} value={s}>{s}</option>)}</select></div>
           <div className="field"><label>Tipo</label><div className="period-tabs" style={{marginTop:2}}><button className={`period-tab${!newExact?" active":""}`} onClick={()=>setNewExact(false)}>Fragmento</button><button className={`period-tab${newExact?" active":""}`} onClick={()=>setNewExact(true)}>Exacta</button></div></div>
         </div>
@@ -1870,7 +1878,7 @@ function GroupCatSelector({allItems,suggestedIdx,onApply,onSkip}){
       <select value={sel} onChange={e=>setSel(e.target.value)}
         style={{background:"var(--s2)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:8,padding:"6px 10px",fontSize:12,fontFamily:"var(--ff)",outline:"none",minWidth:200}}>
         <option value="">Seleccionar categoría...</option>
-        <optgroup label="Gastos">{[...allItems.filter(i=>i.fuente!=="Ingresos")].sort((a,b)=>a.label.localeCompare(b.label,"es")).map(c=><option key={c.id} value={allItems.indexOf(c)}>{c.label} ({c.fuente})</option>)}</optgroup>
+        <optgroup label="Gastos">{[...allItems.filter(i=>i.fuente!=="Ingresos")].sort((a,b)=>a.label.localeCompare(b.label,"es")).map(c=><option key={c.id} value={allItems.indexOf(c)}>{c.label}</option>)}</optgroup>
         <optgroup label="Ingresos">{[...allItems.filter(i=>i.fuente==="Ingresos")].sort((a,b)=>a.label.localeCompare(b.label,"es")).map(c=><option key={c.id} value={allItems.indexOf(c)}>{c.label}</option>)}</optgroup>
       </select>
       <label style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"var(--muted)",cursor:"pointer"}}>
