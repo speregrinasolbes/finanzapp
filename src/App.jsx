@@ -674,7 +674,7 @@ export default function App() {
         <main className="main">
           {classifying&&<div className="classifying-banner"><span className="spin">⟳</span><span>Clasificando con IA... {classifyProgress}%</span><div style={{flex:1}}><div className="progress-bar"><div className="progress-fill" style={{width:`${classifyProgress}%`,background:"var(--blue)"}}/></div></div></div>}
           {tab==="dashboard"&&<Dashboard filteredTxs={filteredTxs} income={income} expense={expense} source={source} selMonth={selMonth} periodLabel={periodLabel} transactions={transactions} saldosIniciales={saldosIniciales} ahorro={ahorro} activeMonths={activeMonths} structure={structure} setTab={setTab}/>}
-          {tab==="transactions"&&<Transactions filteredTxs={filteredTxs} source={source} periodLabel={periodLabel} structure={structure} onAdd={()=>setModal("add")} onEdit={tx=>{setEditTx(tx);setModal("tx");}} onSplit={tx=>{setSplitTx(tx);setModal("split");}} onUpdateCategory={updateTxCategory}/>}
+          {tab==="transactions"&&<Transactions filteredTxs={filteredTxs} source={source} periodLabel={periodLabel} structure={structure} onAdd={()=>setModal("add")} onEdit={tx=>{setEditTx(tx);setModal("tx");}} onSplit={tx=>{setSplitTx(tx);setModal("split");}} onUpdateCategory={updateTxCategory} onGoToBulk={()=>setTab("bulk")}/>}
           {tab==="comparison"&&<Comparison transactions={transactions} budgets={budgets} selMonth={selMonth} periodMode={periodMode} activeMonths={activeMonths} periodLabel={periodLabel} source={source} structure={structure}/>}
           {tab==="budgets"&&<Budgets budgets={budgets} setBudgets={setBudgets} selMonth={selMonth} periodMode={periodMode} activeMonths={activeMonths} periodLabel={periodLabel} monthTxs={transactions.filter(t=>activeMonths.includes(t.date?.slice(0,7)))} showToast={showToast} structure={structure}/>}
           {tab==="ahorro"&&<Ahorro ahorro={ahorro} setAhorro={setAhorro} saldosIniciales={saldosIniciales} setSaldosIniciales={setSaldosIniciales} transactions={transactions} activeMonths={activeMonths} showToast={showToast}/>}
@@ -908,12 +908,13 @@ function MiniTxRow({tx}){
 }
 
 // ── MOVIMIENTOS ───────────────────────────────────────────────────────────────
-function Transactions({filteredTxs,source,periodLabel,structure,onAdd,onEdit,onSplit,onUpdateCategory}){
+function Transactions({filteredTxs,source,periodLabel,structure,onAdd,onEdit,onSplit,onUpdateCategory,onGoToBulk}){
   const [search,setSearch]=useState("");
   const [filterType,setFilterType]=useState("all");
   const [filterSrc,setFilterSrc]=useState("Todos");
+  const [filterCat,setFilterCat]=useState("all"); // all | unclassified | <catLabel>
   const [sortBy,setSortBy]=useState("date");
-  const [sortDir,setSortDir]=useState("desc"); // asc | desc
+  const [sortDir,setSortDir]=useState("desc");
   const allItems=getAllItems(structure);
 
   const toggleSort=(field)=>{
@@ -921,9 +922,16 @@ function Transactions({filteredTxs,source,periodLabel,structure,onAdd,onEdit,onS
     else{setSortBy(field);setSortDir("desc");}
   };
 
+  const unclassifiedCount=filteredTxs.filter(t=>!t.category||t.category==="").length;
+
   const shown=filteredTxs
     .filter(t=>filterType==="all"||(filterType==="income"?t.amount>0:t.amount<0))
     .filter(t=>filterSrc==="Todos"||t.source===filterSrc)
+    .filter(t=>{
+      if(filterCat==="all") return true;
+      if(filterCat==="unclassified") return !t.category||t.category==="";
+      return t.category===filterCat;
+    })
     .filter(t=>!search||t.description?.toLowerCase().includes(search.toLowerCase())||t.category?.toLowerCase().includes(search.toLowerCase()))
     .sort((a,b)=>{
       let cmp=0;
@@ -932,8 +940,10 @@ function Transactions({filteredTxs,source,periodLabel,structure,onAdd,onEdit,onS
       return sortDir==="desc"?-cmp:cmp;
     });
 
-  const srcClass=(s)=>({"Efectivo":"src-ef","Efectivo Ahorro":"src-ef-ah","Santander":"src-san","Santander Ahorro":"src-san2","BBVA":"src-bbva","BBVA Tarjeta Prepago":"src-bbva-tp","Ahorro":"src-ahorro"})[s]||"src-ef";
   const sortIcon=(field)=>sortBy===field?(sortDir==="desc"?"↓":"↑"):"↕";
+
+  // Get unique categories present in filteredTxs for the category filter
+  const usedCats=[...new Set(filteredTxs.map(t=>t.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
 
   return(
     <div>
@@ -947,13 +957,33 @@ function Transactions({filteredTxs,source,periodLabel,structure,onAdd,onEdit,onS
           <button className="btn btn-p btn-sm" onClick={onAdd}>+ Añadir manual</button>
         </div>
       </div>
-      <div className="fg" style={{marginBottom:8}}>
-        <input className="sbar" placeholder="🔍 Buscar concepto o categoría..." value={search} onChange={e=>setSearch(e.target.value)}/>
-        {[["all","Todos"],["income","Ingresos"],["expense","Gastos"]].map(([v,l])=><button key={v} className={`btn btn-sm ${filterType===v?"btn-p":"btn-o"}`} onClick={()=>setFilterType(v)}>{l}</button>)}
-      </div>
-      <div className="fg" style={{marginBottom:12}}>
-        <span style={{fontSize:12,color:"var(--muted)",fontWeight:600}}>Cuenta:</span>
-        {["Todos",...SOURCES].map(s=><button key={s} className={`btn btn-sm ${filterSrc===s?"btn-p":"btn-o"}`} style={{padding:"4px 10px",fontSize:11}} onClick={()=>setFilterSrc(s)}>{s}</button>)}
+
+      {/* Filtros */}
+      <div className="card" style={{marginBottom:12,padding:"10px 14px"}}>
+        <div className="fg" style={{marginBottom:8}}>
+          <input className="sbar" placeholder="🔍 Buscar concepto o categoría..." value={search} onChange={e=>setSearch(e.target.value)} style={{flex:1}}/>
+          {[["all","Todos"],["income","Ingresos"],["expense","Gastos"]].map(([v,l])=><button key={v} className={`btn btn-sm ${filterType===v?"btn-p":"btn-o"}`} onClick={()=>setFilterType(v)}>{l}</button>)}
+        </div>
+        <div className="fg" style={{marginBottom:8,flexWrap:"wrap"}}>
+          <span style={{fontSize:12,color:"var(--muted)",fontWeight:600,whiteSpace:"nowrap"}}>Cuenta:</span>
+          {["Todos",...IMPORT_SOURCES].map(s=><button key={s} className={`btn btn-sm ${filterSrc===s?"btn-p":"btn-o"}`} style={{padding:"4px 10px",fontSize:11}} onClick={()=>setFilterSrc(s)}>{s}</button>)}
+        </div>
+        <div className="fg" style={{flexWrap:"wrap",alignItems:"center"}}>
+          <span style={{fontSize:12,color:"var(--muted)",fontWeight:600,whiteSpace:"nowrap"}}>Categoría:</span>
+          <button className={`btn btn-sm ${filterCat==="all"?"btn-p":"btn-o"}`} onClick={()=>setFilterCat("all")}>Todas</button>
+          <button className={`btn btn-sm ${filterCat==="unclassified"?"btn-p":"btn-o"}`} style={{color:filterCat==="unclassified"?"":"var(--amber)",borderColor:"var(--amber-bg)"}} onClick={()=>setFilterCat("unclassified")}>
+            Sin clasificar {unclassifiedCount>0&&<span style={{background:"var(--amber-bg)",color:"var(--amber)",borderRadius:10,padding:"0 5px",fontSize:10,fontWeight:700}}>{unclassifiedCount}</span>}
+          </button>
+          <select value={filterCat==="all"||filterCat==="unclassified"?"":filterCat}
+            onChange={e=>setFilterCat(e.target.value||"all")}
+            style={{background:"var(--s2)",border:"1px solid var(--border)",color:"var(--text)",borderRadius:7,padding:"4px 8px",fontSize:12,fontFamily:"var(--ff)",outline:"none"}}>
+            <option value="">Por categoría...</option>
+            {usedCats.map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
+          {unclassifiedCount>0&&<button className="btn btn-o btn-sm" style={{marginLeft:"auto",color:"var(--blue)",borderColor:"var(--blue)"}} onClick={onGoToBulk}>
+            🔖 Clasificar {unclassifiedCount} en bloque →
+          </button>}
+        </div>
       </div>
       {shown.length===0?<div className="empty card">Sin resultados</div>:
         <div className="card" style={{padding:0,overflow:"hidden"}}>
@@ -1785,9 +1815,15 @@ function BulkClassify({transactions,setTransactions,structure,rules,setRules,sho
       <div className="sh">
         <div className="sh-title">Clasificación en bloque</div>
         <div className="fg">
-          <span style={{fontSize:12,color:"var(--muted)"}}>{unclassified.length} movimientos sin clasificar</span>
+          {unclassified.length>0
+            ? <span style={{background:"var(--amber-bg)",color:"var(--amber)",borderRadius:20,padding:"3px 10px",fontSize:12,fontWeight:600}}>{unclassified.length} sin clasificar</span>
+            : <span style={{color:"var(--green)",fontSize:12,fontWeight:600}}>✓ Todo clasificado</span>
+          }
+          {groups.length>0&&<button className="btn btn-o btn-sm" onClick={()=>{
+            groups.forEach(g=>{if(g.suggestedCat) applyGroup(g,g.suggestedCat.label,true);});
+          }}>✓ Aplicar todas las sugerencias</button>}
           <button className="btn btn-p" onClick={loadSuggestions} disabled={loading||!unclassified.length}>
-            {loading?<span className="spin">⟳</span>:"✦"} {groups.length?`Recargar sugerencias`:`Analizar con IA`}
+            {loading?<span className="spin">⟳</span>:"✦"} {groups.length?"Recargar":"Analizar con IA"}
           </button>
         </div>
       </div>
